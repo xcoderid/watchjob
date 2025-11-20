@@ -18,7 +18,6 @@ export async function onRequestPost(context) {
 
   if (amount <= 0) return jsonResponse({ error: 'Jumlah harus > 0' }, 400);
   
-  // Cek Saldo via Helper jika Withdrawal
   if (type === 'withdrawal') {
      const balance = await getUserBalance(env, user_id);
      if (balance < amount) return jsonResponse({ error: 'Saldo tidak mencukupi.' }, 400);
@@ -26,9 +25,8 @@ export async function onRequestPost(context) {
 
   try {
     let desc = type === 'deposit' ? `Deposit via ${method}` : `Withdraw ke ${account_info}`;
-    let status = type === 'deposit' ? 'success' : 'pending'; // Deposit auto-success (simulasi)
+    let status = type === 'deposit' ? 'success' : 'pending';
     
-    // HANYA Insert Transaksi. Tidak ada UPDATE users.
     await env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, ?, ?, ?, ?)`).bind(user_id, type, amount, desc, status).run();
 
     return jsonResponse({ success: true, message: `${type} berhasil diajukan.` });
