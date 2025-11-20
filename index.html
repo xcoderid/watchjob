@@ -109,6 +109,9 @@
 
                 // --- AUTH ---
                 async login() {
+                    if (!this.forms.login.username || !this.forms.login.password) {
+                        return this.showToast('Mohon isi username dan password', 'error');
+                    }
                     this.isLoading = true;
                     try {
                         const res = await this.api('/auth?type=login', 'POST', this.forms.login);
@@ -122,6 +125,8 @@
                         await this.api('/auth?type=register', 'POST', this.forms.register);
                         this.showToast('Pendaftaran berhasil! Silakan Login.');
                         this.authMode = 'login';
+                        // Auto-fill username for convenience
+                        this.forms.login.username = this.forms.register.username;
                     } catch(e) {} finally { this.isLoading = false; }
                 },
 
@@ -233,21 +238,46 @@
                     <h1 class="text-2xl font-bold text-slate-900">WatchJob</h1>
                     <p class="text-slate-500 text-sm">Earn by Watching</p>
                 </div>
+                
                 <div class="bg-slate-100 p-1 rounded-lg flex mb-6">
                     <button @click="authMode='login'" :class="authMode==='login'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-2 text-sm font-bold rounded-md transition">Login</button>
                     <button @click="authMode='register'" :class="authMode==='register'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-2 text-sm font-bold rounded-md transition">Daftar</button>
                 </div>
-                <form @submit.prevent="authMode==='login'?login():register()" class="space-y-4">
-                    <div><input x-model="authMode==='login'?forms.login.username:forms.register.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username" required></div>
-                    <div x-show="authMode==='register'"><input x-model="forms.register.email" type="email" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Email"></div>
-                    <div><input x-model="authMode==='login'?forms.login.password:forms.register.password" type="password" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Password" required></div>
-                    <div x-show="authMode==='register'"><input x-model="forms.register.ref_code" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Kode Referral (Opsional)"></div>
-                    
+
+                <!-- LOGIN FORM -->
+                <form x-show="authMode==='login'" @submit.prevent="login()" class="space-y-4">
+                    <div>
+                        <input x-model="forms.login.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username" required>
+                    </div>
+                    <div>
+                        <input x-model="forms.login.password" type="password" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Password" required>
+                    </div>
                     <button type="submit" :disabled="isLoading" class="w-full py-3 bg-primary text-white font-bold rounded-lg shadow-lg shadow-primary/20 hover:bg-primary-light transition disabled:opacity-50 flex justify-center gap-2">
                         <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                        <span x-text="authMode==='login'?'Masuk':'Buat Akun'"></span>
+                        <span x-show="!isLoading">Masuk</span>
                     </button>
                 </form>
+
+                <!-- REGISTER FORM -->
+                <form x-show="authMode==='register'" @submit.prevent="register()" class="space-y-4">
+                    <div>
+                        <input x-model="forms.register.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username Baru" required>
+                    </div>
+                    <div>
+                        <input x-model="forms.register.email" type="email" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Email Aktif" required>
+                    </div>
+                    <div>
+                        <input x-model="forms.register.password" type="password" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Password (Min. 6 Karakter)" required>
+                    </div>
+                    <div>
+                        <input x-model="forms.register.ref_code" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Kode Referral (Opsional)">
+                    </div>
+                    <button type="submit" :disabled="isLoading" class="w-full py-3 bg-primary text-white font-bold rounded-lg shadow-lg shadow-primary/20 hover:bg-primary-light transition disabled:opacity-50 flex justify-center gap-2">
+                        <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                        <span x-show="!isLoading">Buat Akun</span>
+                    </button>
+                </form>
+
             </div>
         </div>
     </template>
