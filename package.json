@@ -1,0 +1,14 @@
+{
+  "name": "watchjobs",
+  "version": "1.0.0",
+  "description": "Serverless Membership Platform with Cloudflare Pages Functions",
+  "scripts": {
+    "dev": "wrangler pages dev . --live-reload",
+    "deploy": "wrangler pages deploy .",
+    "db:init": "wrangler d1 execute watchjobs --local --file=./schema.sql",
+    "db:init:prod": "wrangler d1 execute watchjobs --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
