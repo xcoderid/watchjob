@@ -40,6 +40,10 @@ export async function onRequestGet(context) {
       WHERE user_id = ? AND completed_at >= ?
     `).bind(id, todayStart).first();
 
+    // Ambil Running Text untuk User (Public Config)
+    const settingsRes = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'running_text'").first();
+    const runningText = settingsRes ? settingsRes.value : '';
+
     return jsonResponse({
       user: {
         ...user,
@@ -47,7 +51,8 @@ export async function onRequestGet(context) {
         today_income: incomeRes.total || 0,
         tasks_done: taskRes.total || 0
       },
-      plan: plan || { name: 'No Plan', daily_jobs_limit: 0, commission: 0 }
+      plan: plan || { name: 'No Plan', daily_jobs_limit: 0, commission: 0 },
+      running_text: runningText // Dikirim via endpoint ini agar aman
     });
 
   } catch (e) {
