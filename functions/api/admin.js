@@ -6,7 +6,6 @@ export async function onRequestGet(context) {
   const type = url.searchParams.get('type');
 
   try {
-    // --- 1. STATISTIK DASHBOARD ---
     if (type === 'stats') {
       const userCount = await env.DB.prepare('SELECT COUNT(*) as total FROM users').first();
       const depositSum = await env.DB.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'deposit' AND status = 'success'").first();
@@ -19,9 +18,7 @@ export async function onRequestGet(context) {
       });
     }
     
-    // --- 2. LIST USERS (Dengan Kalkulasi Saldo Dinamis) ---
     if (type === 'users') {
-      // Ambil 50 user terbaru
       const res = await env.DB.prepare(`
         SELECT id, username, email, status, role, created_at 
         FROM users 
@@ -30,8 +27,6 @@ export async function onRequestGet(context) {
       `).all();
       
       const usersWithBalance = [];
-      
-      // Loop setiap user untuk menghitung saldo real-time
       for (const u of res.results) {
           const bal = await getUserBalance(env, u.id);
           usersWithBalance.push({ ...u, balance: bal });
@@ -40,13 +35,11 @@ export async function onRequestGet(context) {
       return jsonResponse(usersWithBalance);
     }
 
-    // --- 3. LIST TRANSAKSI (Deposit & WD) ---
     if (type === 'transactions') {
        const res = await env.DB.prepare("SELECT * FROM transactions WHERE type IN ('deposit', 'withdrawal') ORDER BY created_at DESC LIMIT 50").all();
        return jsonResponse(res.results);
     }
 
-    // --- 4. PENGATURAN SITUS ---
     if (type === 'settings') {
        const res = await env.DB.prepare('SELECT * FROM site_settings').all();
        const settings = {};
@@ -56,7 +49,6 @@ export async function onRequestGet(context) {
        return jsonResponse(settings);
     }
 
-    // --- 5. LIST PLANS ---
     if (type === 'plans') {
         const plans = await env.DB.prepare('SELECT * FROM plans').all();
         return jsonResponse(plans.results);
@@ -75,7 +67,6 @@ export async function onRequestPost(context) {
   const { action } = body;
 
   try {
-    // --- A. UPDATE PENGATURAN (Running Text & Affiliate) ---
     if (action === 'update_settings') {
         const { l1, l2, l3, running_text } = body;
         await env.DB.batch([
@@ -87,15 +78,12 @@ export async function onRequestPost(context) {
         return jsonResponse({ success: true });
     }
 
-    // --- B. BUAT JOB BARU ---
     if (action === 'create_job') {
         const { title, url, min_plan } = body;
         const vidId = getYoutubeId(url); 
         if (!vidId) return jsonResponse({ error: 'URL Youtube tidak valid' }, 400);
 
         const cleanUrl = `https://www.youtube.com/watch?v=${vidId}`;
-        
-        // Ambil durasi tonton default dari paket yang dipilih
         const plan = await env.DB.prepare('SELECT watch_duration FROM plans WHERE id = ?').bind(min_plan).first();
         const duration = plan ? plan.watch_duration : 30;
 
@@ -103,11 +91,8 @@ export async function onRequestPost(context) {
         return jsonResponse({ success: true });
     }
 
-    // --- C. BUAT PLAN BARU ---
     if (action === 'create_plan') {
         const { name, price, duration, daily_jobs, commission, return_capital, thumbnail } = body;
-        
-        // Default watch duration 30 detik jika tidak diisi
         const watchDur = 30; 
 
         await env.DB.prepare(`
@@ -118,22 +103,13 @@ export async function onRequestPost(context) {
         return jsonResponse({ success: true });
     }
 
-    // --- D. PROSES WITHDRAWAL (Approve/Reject) ---
     if (action === 'process_wd') {
         const { tx_id, decision } = body; 
-        
-        // Logika Helper getUserBalance:
-        // - Saldo dihitung dari (Income + Deposit) - (Expense + Withdrawal Pending + Withdrawal Success).
-        // - Jika 'approve' -> status jadi 'success'. (Pengurang saldo tetap berlaku).
-        // - Jika 'reject' -> status jadi 'failed'. (Transaksi 'failed' TIDAK dihitung oleh helper, sehingga saldo 'kembali' ke user).
-        
         const status = decision === 'approve' ? 'success' : 'failed';
         await env.DB.prepare("UPDATE transactions SET status = ? WHERE id = ?").bind(status, tx_id).run();
-        
         return jsonResponse({ success: true });
     }
 
-    // --- E. AKSI USER (Ban/Unban/Reset Password) ---
     if (action === 'user_action') {
         const { user_id, type, new_pass } = body; 
         
@@ -144,7 +120,6 @@ export async function onRequestPost(context) {
             const status = type === 'ban' ? 'banned' : 'active';
             await env.DB.prepare('UPDATE users SET status = ? WHERE id = ?').bind(status, user_id).run();
         }
-        
         return jsonResponse({ success: true });
     }
     
