@@ -1,0 +1,9 @@
+name = "watchjob"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "."
+
+# Konfigurasi Database D1
+[[d1_databases]]
+binding = "DB"
+database_name = "watchjob"
+database_id = "3d3eccf8-53ff-4bb4-af6d-450897926736"
