@@ -1,4 +1,4 @@
-import { jsonResponse } from '../utils';
+import { jsonResponse, getUserBalance } from '../utils';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -8,8 +8,10 @@ export async function onRequestGet(context) {
   if (!id) return jsonResponse({ error: 'User ID required' }, 400);
 
   try {
-    const user = await env.DB.prepare('SELECT id, username, email, referral_code, status, role, balance FROM users WHERE id = ?').bind(id).first();
+    const user = await env.DB.prepare('SELECT id, username, email, referral_code, status, role FROM users WHERE id = ?').bind(id).first();
     if (!user) return jsonResponse({ error: 'User not found' }, 404);
+
+    const balance = await getUserBalance(env, id);
 
     const plan = await env.DB.prepare(`
       SELECT p.name, p.daily_jobs_limit, p.commission, s.end_date
@@ -20,7 +22,6 @@ export async function onRequestGet(context) {
 
     const todayStart = new Date().toISOString().split('T')[0] + ' 00:00:00';
     
-    // Gunakan COALESCE agar tidak null
     const incomeRes = await env.DB.prepare(`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM transactions 
@@ -35,6 +36,7 @@ export async function onRequestGet(context) {
     return jsonResponse({
       user: {
         ...user,
+        balance: balance,
         today_income: incomeRes.total || 0,
         tasks_done: taskRes.total || 0
       },
