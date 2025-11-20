@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AdView Pro Mobile</title>
     
-    <!-- 1. Tailwind CSS -->
+    <!-- 1. Tailwind CSS (CDN untuk Development) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- 2. Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- 3. App Logic (DEFINISIKAN INI DULUAN DI HEAD) -->
+    <!-- 3. LOGIKA APLIKASI (Wajib Didefinisikan Sebelum Alpine) -->
     <script>
         // Konfigurasi Tailwind
         tailwind.config = {
@@ -24,29 +24,15 @@
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
-                    },
-                    animation: {
-                        'fade-in': 'fadeIn 0.3s ease-out',
-                        'slide-up': 'slideUp 0.3s ease-out',
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0' },
-                            '100%': { opacity: '1' },
-                        },
-                        slideUp: {
-                            '0%': { transform: 'translateY(20px)', opacity: '0' },
-                            '100%': { transform: 'translateY(0)', opacity: '1' },
-                        }
                     }
                 }
             }
         }
 
-        // Logika Aplikasi Utama
+        // Fungsi Utama Data Alpine.js
         function appData() {
             return {
-                // State Core
+                // --- STATE VARIABLES ---
                 authView: 'login',
                 view: 'home',
                 loading: false,
@@ -54,19 +40,21 @@
                 token: null,
                 plan: null,
                 
-                // Data Lists
+                // Data Arrays
                 jobs: [],
                 plansList: [],
                 history: [],
                 completedJobIds: [],
+                
+                // Admin Data
                 adminUsers: [],
                 adminPlans: [],
                 adminJobs: [],
                 adminStats: {},
                 
-                // Form States
+                // Form Models
                 forms: {
-                    login: { username: 'user@demo.com', password: '123' },
+                    login: { username: '', password: '' },
                     register: { username: '', email: '', password: '', referral_code: '' },
                     transaction: { amount: '', method: 'Transfer Bank', account_info: '' },
                     plan: { name: '', price: '', duration: '', daily_jobs: '', daily_income: '', return_capital: false, video_seconds: 30, thumbnail: '' },
@@ -79,16 +67,18 @@
                 showJobModal: false,
                 toast: { show: false, message: '', type: 'success' },
 
-                // Job Player States
+                // Player States
                 activeJob: null,
                 activeJobDuration: 0,
                 jobTimer: 0,
                 timerInterval: null,
                 isPageVisible: true,
 
-                // --- INITIALIZATION ---
+                // --- INIT ---
                 initApp() {
-                    // Cek LocalStorage saat init
+                    console.log('App Initializing...');
+                    
+                    // Cek Session Tersimpan
                     const savedToken = localStorage.getItem('adview_token');
                     const savedUser = localStorage.getItem('adview_user');
 
@@ -96,7 +86,7 @@
                         this.token = savedToken;
                         this.user = JSON.parse(savedUser);
                         
-                        // Redirect sesuai role
+                        // Route berdasarkan Role
                         if (this.user.role === 'admin') {
                             this.view = 'admin_dash';
                             this.fetchAdminStats();
@@ -104,8 +94,6 @@
                             this.view = 'home';
                             this.fetchData();
                         }
-                    } else {
-                        this.view = 'home'; // Tampilkan login screen
                     }
 
                     // Anti-Cheat Listener
@@ -116,13 +104,13 @@
                                 clearInterval(this.timerInterval);
                                 this.timerInterval = null;
                             } else {
-                                if (!this.timerInterval) this.startTimer();
+                                if (!this.timerInterval && this.jobTimer > 0) this.startTimer();
                             }
                         }
                     });
                 },
 
-                // --- API HELPER ---
+                // --- API HANDLER (FIXED) ---
                 async api(endpoint, method = 'GET', body = null) {
                     const headers = { 'Content-Type': 'application/json' };
                     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
@@ -133,16 +121,23 @@
                             headers,
                             body: body ? JSON.stringify(body) : null
                         });
+                        
                         const json = await res.json();
-                        if (!res.ok) throw new Error(json.error || `Error ${res.status}`);
+                        
+                        if (!res.ok) {
+                            // Lempar error dengan pesan dari backend jika ada
+                            throw new Error(json.error || `Error ${res.status}: ${res.statusText}`);
+                        }
+                        
                         return json;
                     } catch (e) {
+                        console.error("API Error:", e);
                         this.showToast(e.message, 'error');
-                        throw e;
+                        throw e; // Re-throw agar caller tau ini gagal
                     }
                 },
 
-                // --- AUTH ---
+                // --- AUTHENTICATION ---
                 async login() {
                     this.loading = true;
                     try {
@@ -151,6 +146,7 @@
                             this.token = res.token;
                             this.user = res.user;
                             this.plan = res.plan;
+                            
                             localStorage.setItem('adview_token', res.token);
                             localStorage.setItem('adview_user', JSON.stringify(res.user));
                             
@@ -161,7 +157,7 @@
                             this.showToast('Login berhasil!', 'success');
                         }
                     } catch (e) {
-                        console.error(e);
+                        // Error sudah ditangani di api() via showToast
                     } finally { this.loading = false; }
                 },
 
@@ -170,12 +166,12 @@
                     try {
                         const res = await this.api('/api/auth?type=register', 'POST', this.forms.register);
                         if (res.success) {
-                            this.showToast('Pendaftaran sukses! Silakan masuk.', 'success');
+                            this.showToast('Registrasi berhasil! Silakan login.', 'success');
                             this.authView = 'login';
                             this.forms.register = { username: '', email: '', password: '', referral_code: '' };
                         }
                     } catch (e) {
-                        console.error(e);
+                        // Error sudah ditangani di api()
                     } finally { this.loading = false; }
                 },
 
@@ -189,61 +185,51 @@
                     this.showToast('Berhasil keluar.', 'success');
                 },
 
-                // --- MEMBER DATA ---
+                // --- DATA FETCHING ---
                 async fetchData() {
                     if (!this.user || this.user.role !== 'member') return;
                     try {
-                        // 1. User & Plan
-                        const userData = await this.api(`/api/users?id=${this.user.id}`);
+                        // Parallel fetch agar lebih cepat
+                        const [userData, plansData, jobsData, trxData] = await Promise.all([
+                            this.api(`/api/users?id=${this.user.id}`),
+                            this.api('/api/plans'),
+                            this.api(`/api/jobs?user_id=${this.user.id}`),
+                            this.api(`/api/transactions?user_id=${this.user.id}`)
+                        ]);
+
                         this.user = { ...this.user, ...userData.user };
                         this.plan = userData.plan;
-                        localStorage.setItem('adview_user', JSON.stringify(this.user));
-
-                        // 2. Plans
-                        this.plansList = await this.api('/api/plans');
-
-                        // 3. Jobs
-                        const jobsData = await this.api(`/api/jobs?user_id=${this.user.id}`);
+                        this.plansList = plansData;
                         this.jobs = jobsData.jobs;
                         this.completedJobIds = jobsData.completed_ids;
-
-                        // 4. History
-                        this.history = await this.api(`/api/transactions?user_id=${this.user.id}`);
-                    } catch (e) { console.error(e); }
+                        this.history = trxData;
+                        
+                        // Update local storage user data agar balance sync
+                        localStorage.setItem('adview_user', JSON.stringify(this.user));
+                        
+                    } catch (e) { console.error("Fetch Data Error", e); }
                 },
 
                 // --- ADMIN DATA ---
-                async fetchAdminStats() {
-                    try { this.adminStats = await this.api('/api/admin?type=stats'); } catch (e) {}
-                },
-                async fetchAdminUsers() {
-                    try { this.adminUsers = await this.api('/api/admin?type=users'); } catch (e) {}
-                },
-                async fetchAdminPlans() {
-                    try { this.adminPlans = await this.api('/api/admin?type=plans'); } catch (e) {}
-                },
-                async fetchAdminJobs() {
-                    try { 
-                        const res = await this.api(`/api/jobs?user_id=${this.user.id}`); // Reuse endpoint logic
-                        this.adminJobs = res.jobs; 
-                    } catch (e) {}
-                },
+                async fetchAdminStats() { try { this.adminStats = await this.api('/api/admin?type=stats'); } catch(e){} },
+                async fetchAdminUsers() { try { this.adminUsers = await this.api('/api/admin?type=users'); } catch(e){} },
+                async fetchAdminPlans() { try { this.adminPlans = await this.api('/api/admin?type=plans'); } catch(e){} },
+                async fetchAdminJobs() { try { const res = await this.api(`/api/jobs?user_id=${this.user.id}`); this.adminJobs = res.jobs; } catch(e){} },
 
-                // --- ACTIONS ---
+                // --- ADMIN ACTIONS ---
                 async toggleUserStatus(userId, currentStatus) {
                     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-                    if (!confirm(`Ubah status user ${userId}?`)) return;
+                    if(!confirm(`Ubah status user ke ${newStatus}?`)) return;
                     try {
                         await this.api('/api/admin', 'POST', { action: 'toggle_user', user_id: userId, status: newStatus });
-                        this.showToast('Status berhasil diubah', 'success');
                         this.fetchAdminUsers();
-                    } catch (e) {}
+                        this.showToast('Status user diubah', 'success');
+                    } catch(e){}
                 },
-
                 async createPlan() {
                     try {
                         await this.api('/api/admin', 'POST', { 
-                            action: 'create_plan',
+                            action: 'create_plan', 
                             name: this.forms.plan.name,
                             price: parseFloat(this.forms.plan.price),
                             duration: parseInt(this.forms.plan.duration),
@@ -253,12 +239,11 @@
                             video_seconds: parseInt(this.forms.plan.video_seconds),
                             thumbnail: this.forms.plan.thumbnail
                         });
-                        this.showToast('Paket dibuat!', 'success');
                         this.showPlanModal = false;
                         this.fetchAdminPlans();
-                    } catch (e) {}
+                        this.showToast('Plan dibuat', 'success');
+                    } catch(e){}
                 },
-
                 async createJob() {
                     try {
                         await this.api('/api/admin', 'POST', {
@@ -268,27 +253,13 @@
                             reward: parseFloat(this.forms.job.reward),
                             min_level: parseInt(this.forms.job.min_level)
                         });
-                        this.showToast('Job ditambahkan!', 'success');
                         this.showJobModal = false;
                         this.fetchAdminJobs();
-                    } catch (e) {}
+                        this.showToast('Job ditambahkan', 'success');
+                    } catch(e){}
                 },
 
-                // --- JOBS LOGIC ---
-                startTimer() {
-                    if (this.timerInterval) clearInterval(this.timerInterval);
-                    this.timerInterval = setInterval(() => {
-                        if (this.isPageVisible && this.jobTimer > 0) {
-                            this.jobTimer--;
-                        }
-                        if (this.jobTimer <= 0) {
-                            clearInterval(this.timerInterval);
-                            this.timerInterval = null;
-                            this.showToast('Misi Selesai! Klaim Reward.', 'success');
-                        }
-                    }, 1000);
-                },
-
+                // --- JOB SYSTEM ---
                 startJob(job) {
                     const duration = this.plan ? this.plan.video_duration_sec : 15;
                     this.activeJob = job;
@@ -298,45 +269,49 @@
                     this.isPageVisible = true;
                     this.startTimer();
                 },
-
+                startTimer() {
+                    if(this.timerInterval) clearInterval(this.timerInterval);
+                    this.timerInterval = setInterval(() => {
+                        if(this.isPageVisible && this.jobTimer > 0) {
+                            this.jobTimer--;
+                        }
+                        if(this.jobTimer <= 0) {
+                            clearInterval(this.timerInterval);
+                            this.timerInterval = null;
+                        }
+                    }, 1000);
+                },
                 cancelJob() {
                     clearInterval(this.timerInterval);
                     this.timerInterval = null;
                     this.activeJob = null;
                     this.view = 'jobs';
                 },
-
                 async claimJob() {
-                    if (this.jobTimer > 0) return;
+                    if(this.jobTimer > 0) return;
                     try {
-                        const res = await this.api('/api/jobs', 'POST', {
-                            action: 'claim',
-                            user_id: this.user.id,
-                            job_id: this.activeJob.id
-                        });
+                        const res = await this.api('/api/jobs', 'POST', { action: 'claim', user_id: this.user.id, job_id: this.activeJob.id });
                         this.showToast(`Reward +${this.formatRupiah(res.reward)}`, 'success');
                         this.cancelJob();
                         this.fetchData();
-                    } catch (e) {}
+                    } catch(e){}
                 },
-
                 isJobDone(id) { return this.completedJobIds.includes(id); },
 
-                // --- WALLET & PLANS ---
+                // --- TRANSACTION SYSTEM ---
                 async buyPlan(plan) {
-                    if (!confirm(`Beli paket ${plan.name}?`)) return;
+                    if(!confirm(`Beli ${plan.name}?`)) return;
                     try {
                         await this.api('/api/plans', 'POST', { user_id: this.user.id, plan_id: plan.id });
-                        this.showToast('Upgrade Berhasil!', 'success');
+                        this.showToast('Upgrade sukses!', 'success');
                         this.fetchData();
-                    } catch (e) {}
+                    } catch(e){}
                 },
-
                 async handleTransaction() {
                     try {
                         const res = await this.api('/api/transactions', 'POST', {
                             user_id: this.user.id,
-                            type: this.walletAction,
+                            type: this.walletAction === 'deposit' ? 'deposit' : 'withdrawal',
                             amount: parseFloat(this.forms.transaction.amount),
                             method: this.forms.transaction.method,
                             account_info: this.forms.transaction.account_info
@@ -344,37 +319,31 @@
                         this.showToast(res.message, 'success');
                         this.walletAction = null;
                         this.fetchData();
-                    } catch (e) {}
+                    } catch(e){}
                 },
 
-                // --- UTILS ---
+                // --- HELPERS ---
                 async changeView(v) {
                     this.view = v;
-                    if (this.user) {
-                         if (this.user.role === 'member') this.fetchData();
-                         else {
+                    if(this.user) {
+                        if(this.user.role === 'member') this.fetchData();
+                        else {
                              if(v==='admin_dash') this.fetchAdminStats();
                              if(v==='admin_users') this.fetchAdminUsers();
                              if(v==='admin_plans') this.fetchAdminPlans();
                              if(v==='admin_jobs') this.fetchAdminJobs();
-                         }
+                        }
                     }
                 },
-                formatRupiah(num) {
-                    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(num || 0);
-                },
-                formatTime(sec) {
-                    const m = Math.floor(sec / 60).toString().padStart(2,'0');
-                    const s = (sec % 60).toString().padStart(2,'0');
-                    return `${m}:${s}`;
-                },
+                formatRupiah(num) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(num || 0); },
+                formatTime(sec) { const m = Math.floor(sec/60).toString().padStart(2,'0'); const s = (sec%60).toString().padStart(2,'0'); return `${m}:${s}`; },
                 getYoutubeId(url) {
                     if(!url) return '';
                     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
                     const match = url.match(regExp);
                     return (match && match[2].length === 11) ? match[2] : 'dQw4w9WgXcQ';
                 },
-                showToast(msg, type) {
+                showToast(msg, type='success') {
                     this.toast.message = msg;
                     this.toast.type = type;
                     this.toast.show = true;
@@ -387,8 +356,8 @@
             }
         }
     </script>
-
-    <!-- 4. Alpine JS (LOAD TERAKHIR) -->
+    
+    <!-- 4. Alpine.js (LOAD TERAKHIR dengan DEFER) -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
 
     <style>
@@ -458,11 +427,11 @@
                 <form x-show="authView==='login'" @submit.prevent="login" class="space-y-4 relative z-10 animate-slide-up">
                     <div>
                         <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Username</label>
-                        <input type="text" x-model="forms.login.username" class="w-full pl-4 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition font-medium" placeholder="Masukkan username" required>
+                        <input type="text" x-model="forms.login.username" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" placeholder="Username" required>
                     </div>
                     <div>
                         <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">Password</label>
-                        <input type="password" x-model="forms.login.password" class="w-full pl-4 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none transition font-medium" placeholder="••••••••" required>
+                        <input type="password" x-model="forms.login.password" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary outline-none" placeholder="Password" required>
                     </div>
                     <button type="submit" class="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition disabled:opacity-70" :disabled="loading">
                         <span x-show="!loading">Masuk Sekarang</span>
