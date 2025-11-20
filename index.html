@@ -1,614 +1,231 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Serverless Membership Platform</title>
+    <title>Membership Manager</title>
+    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <!-- Load Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        /* Custom styles for better aesthetics */
         [x-cloak] { display: none !important; }
-        .scrolling-text {
-            animation: scroll-left 20s linear infinite;
-        }
-        @keyframes scroll-left {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
-        }
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans antialiased" x-data="membershipApp()">
+<body class="bg-gray-900 text-gray-100 font-sans antialiased min-h-screen p-4 sm:p-8">
 
-    <!-- Auth Check (Mock) -->
-    <template x-if="!loggedIn">
-        <div class="min-h-screen flex items-center justify-center px-4">
-            <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md border border-gray-700">
-                <div class="text-center mb-6">
-                    <i class="fas fa-rocket text-4xl text-indigo-500 mb-2"></i>
-                    <h2 class="text-2xl font-bold">Login Member</h2>
-                    <p class="text-gray-400 text-sm">Masuk untuk mulai menghasilkan</p>
-                </div>
-                <div class="space-y-4">
+    <!-- Main application container with x-data -->
+    <!-- The errors are fixed because 'membershipApp()' is now defined globally in the script module -->
+    <div 
+        class="max-w-4xl mx-auto bg-gray-800 p-6 sm:p-10 rounded-xl shadow-2xl border border-gray-700"
+        x-data="membershipApp()"
+        x-cloak
+        x-init="init()"
+    >
+        <h1 class="text-4xl font-bold mb-6 text-indigo-400">Secure Membership Portal</h1>
+        <p class="mb-8 text-gray-400">Powered by Alpine.js and Firebase Firestore.</p>
+
+        <!-- Loading State -->
+        <div x-if="loading" class="text-center py-10">
+            <svg class="animate-spin h-8 w-8 text-indigo-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-indigo-300">Establishing connection...</p>
+        </div>
+
+        <!-- Authentication Required View (x-if="!loggedIn" fixed) -->
+        <template x-if="!loggedIn && !loading">
+            <div class="text-center bg-gray-700 p-6 rounded-lg">
+                <h2 class="text-2xl font-semibold text-red-400 mb-3">Authentication Error</h2>
+                <p class="text-gray-300">Could not establish a secure session. Please check Firebase configuration.</p>
+                <p class="mt-4 text-sm text-gray-500">
+                    User ID will be automatically generated.
+                </p>
+            </div>
+        </template>
+
+        <!-- Logged In View (x-if="loggedIn" fixed) -->
+        <template x-if="loggedIn && !loading">
+            <div class="space-y-6">
+                <div class="bg-indigo-900/30 p-4 rounded-lg flex items-center justify-between">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
-                        <input type="text" x-model="loginForm.username" class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-indigo-500" placeholder="admin atau user">
+                        <p class="text-sm text-indigo-300">Current User ID:</p>
+                        <p class="font-mono text-xs break-all text-indigo-100" x-text="userId"></p>
                     </div>
-                    <button @click="login()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition">Masuk</button>
-                    <p class="text-xs text-center text-gray-500 mt-4">Gunakan username: <b>admin</b> atau <b>user</b></p>
+                </div>
+
+                <!-- Membership Data Section -->
+                <h2 class="text-2xl font-semibold text-gray-200 border-b border-gray-700 pb-2">Your Membership Status</h2>
+                
+                <div class="space-y-4">
+                    <div x-if="membershipData" class="bg-gray-700 p-5 rounded-lg shadow-md">
+                        <p class="text-xl font-bold" x-text="membershipData.plan"></p>
+                        <p class="text-gray-400">Since: <span x-text="new Date(membershipData.joinDate).toLocaleDateString()"></span></p>
+                        <p class="mt-2" :class="membershipData.active ? 'text-green-400' : 'text-red-400'">
+                            Status: <span x-text="membershipData.active ? 'Active' : 'Inactive'"></span>
+                        </p>
+                        <button @click="updateMembership" class="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white font-medium transition duration-150">
+                            Update Plan (Demo)
+                        </button>
+                    </div>
+                    <div x-if="!membershipData" class="text-center p-6 border-2 border-dashed border-gray-600 rounded-lg text-gray-400">
+                        <p>No membership data found. Setting up initial data...</p>
+                        <button @click="createInitialData" class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-medium transition duration-150">
+                            Create Membership Record
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-    </template>
+        </template>
+        
+    </div>
 
-    <!-- Main App Interface -->
-    <template x-if="loggedIn">
-        <div class="flex h-screen overflow-hidden">
-            
-            <!-- Sidebar (Desktop) -->
-            <aside class="hidden md:flex flex-col w-64 bg-gray-800 border-r border-gray-700">
-                <div class="p-6 flex items-center gap-3 border-b border-gray-700">
-                    <i class="fas fa-cube text-indigo-500 text-xl"></i>
-                    <span class="font-bold text-xl tracking-tight">MyAdPlatform</span>
-                </div>
-                
-                <!-- Admin Menu -->
-                <template x-if="currentUser.role === 'admin'">
-                    <nav class="flex-1 overflow-y-auto p-4 space-y-2">
-                        <p class="text-xs font-semibold text-gray-500 uppercase px-2 mb-2">Admin Area</p>
-                        <a @click="view = 'admin_dashboard'" :class="view === 'admin_dashboard' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-tachometer-alt w-5"></i> Dashboard
-                        </a>
-                        <a @click="view = 'admin_plans'" :class="view === 'admin_plans' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-layer-group w-5"></i> Level & Paket
-                        </a>
-                        <a @click="view = 'admin_jobs'" :class="view === 'admin_jobs' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fab fa-youtube w-5"></i> Manajemen Jobs
-                        </a>
-                        <a @click="view = 'admin_users'" :class="view === 'admin_users' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-users w-5"></i> Data Member
-                        </a>
-                    </nav>
-                </template>
+    <!-- Load Alpine.js at the end of the body for best practice, with defer -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.5/dist/cdn.min.js"></script>
 
-                <!-- Member Menu -->
-                <template x-if="currentUser.role === 'member'">
-                    <nav class="flex-1 overflow-y-auto p-4 space-y-2">
-                        <p class="text-xs font-semibold text-gray-500 uppercase px-2 mb-2">Member Area</p>
-                        <div class="bg-gray-900 p-3 rounded mb-4 border border-gray-700">
-                            <p class="text-xs text-gray-400">Saldo Anda</p>
-                            <p class="text-lg font-bold text-green-400" x-text="formatRupiah(currentUser.balance)"></p>
-                            <p class="text-xs text-indigo-400 mt-1" x-text="currentPlan.name"></p>
-                        </div>
-                        
-                        <a @click="view = 'member_dashboard'" :class="view === 'member_dashboard' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-home w-5"></i> Beranda
-                        </a>
-                        <a @click="view = 'member_jobs'" :class="view === 'member_jobs' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-play-circle w-5"></i> Misi Nonton
-                        </a>
-                        <a @click="view = 'member_vip'" :class="view === 'member_vip' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-crown w-5"></i> Upgrade VIP
-                        </a>
-                        <a @click="view = 'member_referral'" :class="view === 'member_referral' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-700'" class="flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition">
-                            <i class="fas fa-network-wired w-5"></i> Afiliasi
-                        </a>
-                    </nav>
-                </template>
+    <!-- Firebase Initialization and Alpine Component Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-                <div class="p-4 border-t border-gray-700">
-                    <button @click="logout()" class="flex items-center gap-2 text-red-400 hover:text-red-300 transition text-sm">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                </div>
-            </aside>
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-            <!-- Main Content Area -->
-            <main class="flex-1 flex flex-col h-screen relative overflow-hidden">
-                
-                <!-- Topbar (Mobile & Desktop Info) -->
-                <header class="bg-gray-800 border-b border-gray-700 h-16 flex items-center justify-between px-4 md:px-6 z-10">
-                    <div class="md:hidden flex items-center gap-2">
-                         <i class="fas fa-cube text-indigo-500"></i>
-                         <span class="font-bold">MyAdPlatform</span>
-                    </div>
-                    <div class="hidden md:block text-sm text-gray-400">
-                        <span x-text="getDateString()"></span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-sm font-medium" x-text="currentUser.username"></span>
-                        <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold">
-                            <span x-text="currentUser.username.substring(0,2).toUpperCase()"></span>
-                        </div>
-                    </div>
-                </header>
+        let db;
+        let auth;
+        let userId;
+        let unsubscribe = () => {}; // Placeholder for the Firestore listener cleanup function
 
-                <!-- Scrollable Content -->
-                <div class="flex-1 overflow-y-auto bg-gray-900 p-4 md:p-8 pb-20">
-                    
-                    <!-- ADMIN VIEWS -->
-                    
-                    <!-- 1. Admin Dashboard -->
-                    <div x-show="view === 'admin_dashboard'" x-cloak>
-                        <h2 class="text-2xl font-bold mb-6">Admin Dashboard</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
-                                <p class="text-gray-400 text-sm">Total User</p>
-                                <p class="text-2xl font-bold text-white" x-text="users.length"></p>
-                            </div>
-                            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
-                                <p class="text-gray-400 text-sm">Deposit Masuk</p>
-                                <p class="text-2xl font-bold text-green-400">Rp 45.000.000</p>
-                            </div>
-                            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
-                                <p class="text-gray-400 text-sm">Paket Aktif</p>
-                                <p class="text-2xl font-bold text-indigo-400">128</p>
-                            </div>
-                            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 shadow-lg">
-                                <p class="text-gray-400 text-sm">Pending Task</p>
-                                <p class="text-2xl font-bold text-yellow-400">12</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Settings Mockup -->
-                        <div class="bg-gray-800 rounded-lg border border-gray-700 p-6">
-                            <h3 class="text-lg font-bold mb-4">Pengaturan Running Text</h3>
-                            <div class="flex gap-2">
-                                <input type="text" x-model="runningText" class="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white" placeholder="Masukkan teks berjalan untuk member...">
-                                <button class="bg-green-600 px-4 py-2 rounded hover:bg-green-700">Simpan</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 2. Admin Plans -->
-                    <div x-show="view === 'admin_plans'" x-cloak>
-                        <div class="flex justify-between items-center mb-6">
-                            <h2 class="text-2xl font-bold">Manajemen Paket Level</h2>
-                            <button @click="openModal('addPlan')" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded text-sm"><i class="fas fa-plus mr-2"></i>Buat Paket</button>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <template x-for="plan in plans" :key="plan.id">
-                                <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden relative">
-                                    <div class="h-32 bg-cover bg-center" :style="`background-image: url('${plan.thumbnail}')`">
-                                        <div class="absolute top-0 right-0 bg-black/60 px-2 py-1 text-xs m-2 rounded">ID: <span x-text="plan.id"></span></div>
-                                    </div>
-                                    <div class="p-4">
-                                        <h3 class="text-xl font-bold" x-text="plan.name"></h3>
-                                        <p class="text-indigo-400 font-bold text-lg my-2" x-text="formatRupiah(plan.price)"></p>
-                                        <ul class="text-sm text-gray-400 space-y-1 mb-4">
-                                            <li><i class="fas fa-clock w-5 text-gray-500"></i> Durasi: <span x-text="plan.duration"></span> Hari</li>
-                                            <li><i class="fas fa-video w-5 text-gray-500"></i> <span x-text="plan.daily_jobs"></span> Video/Hari</li>
-                                            <li><i class="fas fa-undo w-5 text-gray-500"></i> Return Modal: <span x-text="plan.return_capital ? 'Ya' : 'Hangus'"></span></li>
-                                            <li><i class="fas fa-stopwatch w-5 text-gray-500"></i> Wajib Nonton: <span x-text="plan.watch_seconds"></span> Detik</li>
-                                        </ul>
-                                        <button class="w-full border border-gray-600 hover:bg-gray-700 py-1 rounded text-sm">Edit</button>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- 3. Admin Users -->
-                    <div x-show="view === 'admin_users'" x-cloak>
-                        <h2 class="text-2xl font-bold mb-6">Data Member</h2>
-                        <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-x-auto">
-                            <table class="w-full text-left text-sm">
-                                <thead class="bg-gray-700 text-gray-300">
-                                    <tr>
-                                        <th class="p-4">Username</th>
-                                        <th class="p-4">Plan</th>
-                                        <th class="p-4">Saldo</th>
-                                        <th class="p-4">Status</th>
-                                        <th class="p-4">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-700">
-                                    <template x-for="u in users" :key="u.id">
-                                        <tr class="hover:bg-gray-750">
-                                            <td class="p-4 font-medium" x-text="u.username"></td>
-                                            <td class="p-4"><span class="px-2 py-1 bg-indigo-900 text-indigo-200 rounded-full text-xs" x-text="getPlanName(u.plan_id)"></span></td>
-                                            <td class="p-4" x-text="formatRupiah(u.balance)"></td>
-                                            <td class="p-4">
-                                                <span :class="u.status === 'active' ? 'text-green-400' : 'text-red-400'" x-text="u.status"></span>
-                                            </td>
-                                            <td class="p-4 flex gap-2">
-                                                <button class="text-blue-400 hover:text-blue-300" title="Reset Password"><i class="fas fa-key"></i></button>
-                                                <button @click="toggleUserStatus(u.id)" class="text-red-400 hover:text-red-300" title="Nonaktifkan"><i class="fas fa-power-off"></i></button>
-                                            </td>
-                                        </tr>
-                                    </template>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- MEMBER VIEWS -->
-
-                    <!-- 1. Member Dashboard -->
-                    <div x-show="view === 'member_dashboard'" x-cloak>
-                        <!-- Running Text -->
-                        <div class="bg-indigo-900/50 border border-indigo-500/30 p-2 rounded mb-6 overflow-hidden whitespace-nowrap relative">
-                            <div class="scrolling-text text-sm text-indigo-200 font-medium" x-text="runningText"></div>
-                        </div>
-
-                        <!-- Image Slider -->
-                        <div class="relative w-full h-48 md:h-64 bg-gray-800 rounded-xl overflow-hidden mb-6 group">
-                            <img :src="sliderImages[currentSlide]" class="w-full h-full object-cover transition duration-500">
-                            <div class="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent"></div>
-                            <div class="absolute bottom-4 left-4">
-                                <h3 class="text-xl font-bold">Event Spesial Tahun Baru!</h3>
-                                <p class="text-sm text-gray-300">Dapatkan bonus deposit 10% hari ini.</p>
-                            </div>
-                            <button @click="prevSlide()" class="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 p-2 rounded-full hover:bg-black/70">&lt;</button>
-                            <button @click="nextSlide()" class="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 p-2 rounded-full hover:bg-black/70">&gt;</button>
-                        </div>
-
-                        <!-- Member Stats -->
-                        <h3 class="font-bold text-lg mb-4">Statistik Harian</h3>
-                        <div class="grid grid-cols-2 gap-4 mb-8">
-                            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="bg-green-500/20 p-2 rounded-lg text-green-400"><i class="fas fa-wallet"></i></div>
-                                    <span class="text-xs text-gray-400">Pendapatan Hari Ini</span>
-                                </div>
-                                <p class="text-xl font-bold" x-text="formatRupiah(currentUser.today_income)"></p>
-                            </div>
-                            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="bg-blue-500/20 p-2 rounded-lg text-blue-400"><i class="fas fa-tasks"></i></div>
-                                    <span class="text-xs text-gray-400">Tugas Selesai</span>
-                                </div>
-                                <p class="text-xl font-bold"><span x-text="currentUser.tasks_done"></span> / <span x-text="currentPlan.daily_jobs"></span></p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 2. Member Jobs (List) -->
-                    <div x-show="view === 'member_jobs'" x-cloak>
-                        <div class="flex justify-between items-end mb-6">
-                            <div>
-                                <h2 class="text-2xl font-bold">Misi Video</h2>
-                                <p class="text-sm text-gray-400">Tonton video sampai habis tanpa skip/pindah tab.</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-xs text-gray-400">Sisa Kuota</p>
-                                <p class="text-xl font-bold text-indigo-400"><span x-text="currentPlan.daily_jobs - currentUser.tasks_done"></span> Video</p>
-                            </div>
-                        </div>
-
-                        <div class="space-y-4">
-                            <template x-if="currentUser.tasks_done >= currentPlan.daily_jobs">
-                                <div class="bg-red-900/30 border border-red-500/30 p-4 rounded-lg text-center">
-                                    <i class="fas fa-check-circle text-red-400 text-3xl mb-2"></i>
-                                    <p class="font-bold">Kuota Harian Habis</p>
-                                    <p class="text-sm text-gray-400">Kembali lagi besok atau upgrade plan.</p>
-                                </div>
-                            </template>
-
-                            <template x-if="currentUser.tasks_done < currentPlan.daily_jobs">
-                                <template x-for="job in jobs" :key="job.id">
-                                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex items-center justify-between hover:border-indigo-500 transition">
-                                        <div class="flex items-center gap-4">
-                                            <div class="w-16 h-10 bg-gray-700 rounded overflow-hidden flex items-center justify-center relative">
-                                                <i class="fab fa-youtube text-red-500 text-lg"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="font-bold text-sm line-clamp-1" x-text="job.title"></h4>
-                                                <p class="text-xs text-green-400 font-semibold">Upah: <span x-text="formatRupiah(job.reward)"></span></p>
-                                            </div>
-                                        </div>
-                                        <button @click="startJob(job)" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-full">
-                                            Kerjakan
-                                        </button>
-                                    </div>
-                                </template>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- 3. Do Job (Watch Video) -->
-                    <div x-show="view === 'do_job'" x-cloak class="flex flex-col h-full">
-                        <div class="mb-4 flex items-center justify-between">
-                             <button @click="view = 'member_jobs'; stopJobTimer()" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left mr-2"></i> Kembali</button>
-                             <span class="bg-gray-800 px-3 py-1 rounded-full text-xs border border-gray-700" :class="isFocused ? 'text-green-400' : 'text-red-400'">
-                                <i class="fas fa-eye mr-1"></i> <span x-text="isFocused ? 'Fokus Aktif' : 'Fokus Hilang - Timer Stop'"></span>
-                             </span>
-                        </div>
-
-                        <!-- Video Embed Mock -->
-                        <div class="w-full aspect-video bg-black rounded-xl overflow-hidden relative mb-4 shadow-2xl border border-gray-700">
-                            <template x-if="activeJob">
-                                <iframe class="w-full h-full" :src="getEmbedUrl(activeJob.url)" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                            </template>
-                            <!-- Overlay for Focus Warning -->
-                            <div x-show="!isFocused && jobInProgress" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-20 text-center p-6">
-                                <i class="fas fa-exclamation-triangle text-yellow-500 text-4xl mb-4"></i>
-                                <h3 class="text-xl font-bold text-white">Deteksi Tidak Fokus!</h3>
-                                <p class="text-gray-300 text-sm mt-2">Jangan tinggalkan halaman ini atau timer akan berhenti.</p>
-                            </div>
-                        </div>
-
-                        <!-- Timer & Controls -->
-                        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 text-center">
-                            <h3 class="text-lg font-bold mb-2" x-text="activeJob?.title"></h3>
-                            <div class="flex justify-center items-center gap-2 mb-4">
-                                <i class="fas fa-clock text-indigo-400"></i>
-                                <span class="text-3xl font-mono font-bold" x-text="formatTime(jobTimer)"></span>
-                            </div>
-                            <div class="h-2 w-full bg-gray-700 rounded-full overflow-hidden mb-4">
-                                <div class="h-full bg-indigo-500 transition-all duration-1000" :style="`width: ${(1 - (jobTimer / currentPlan.watch_seconds)) * 100}%`"></div>
-                            </div>
-                            <p class="text-sm text-gray-400" x-show="jobTimer > 0">Tonton video sampai timer habis untuk klaim <span class="text-green-400 font-bold" x-text="formatRupiah(activeJob?.reward)"></span></p>
-                            
-                            <button x-show="jobTimer === 0" @click="claimReward()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg animate-bounce">
-                                KLAIM HADIAH SEKARANG!
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 4. VIP Upgrade -->
-                    <div x-show="view === 'member_vip'" x-cloak>
-                        <h2 class="text-2xl font-bold mb-2">Upgrade VIP</h2>
-                        <p class="text-gray-400 text-sm mb-6">Tingkatkan penghasilan harian Anda dengan membeli paket.</p>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <template x-for="plan in plans" :key="plan.id">
-                                <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden hover:border-indigo-500 transition transform hover:-translate-y-1 shadow-xl flex flex-col">
-                                    <div class="h-32 bg-cover bg-center relative" :style="`background-image: url('${plan.thumbnail}')`">
-                                        <div class="absolute inset-0 bg-black/40"></div>
-                                        <div class="absolute bottom-4 left-4">
-                                            <h3 class="text-xl font-bold text-white" x-text="plan.name"></h3>
-                                        </div>
-                                        <div x-show="currentUser.plan_id === plan.id" class="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded">Plan Saat Ini</div>
-                                    </div>
-                                    <div class="p-6 flex-1 flex flex-col">
-                                        <div class="text-3xl font-bold text-white mb-4" x-text="formatRupiah(plan.price)"></div>
-                                        <ul class="space-y-3 text-sm text-gray-300 flex-1">
-                                            <li class="flex items-center gap-2"><i class="fas fa-check text-green-400"></i> <span x-text="plan.duration"></span> Hari Masa Aktif</li>
-                                            <li class="flex items-center gap-2"><i class="fas fa-check text-green-400"></i> <span x-text="plan.daily_jobs"></span> Video Per Hari</li>
-                                            <li class="flex items-center gap-2"><i class="fas fa-check text-green-400"></i> Estimasi Rp <span x-text="formatRupiah(plan.daily_jobs * 5000)"></span>/hari</li> <!-- Mock calc -->
-                                            <li class="flex items-center gap-2">
-                                                <i :class="plan.return_capital ? 'fas fa-check text-green-400' : 'fas fa-times text-red-400'"></i> 
-                                                <span>Modal <span x-text="plan.return_capital ? 'Dikembalikan' : 'Hangus'"></span></span>
-                                            </li>
-                                        </ul>
-                                        <button @click="alert('Fitur Deposit/Beli Paket akan memotong saldo wallet!')" :disabled="currentUser.plan_id === plan.id" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg transition">
-                                            <span x-text="currentUser.plan_id === plan.id ? 'Aktif' : 'Beli Paket'"></span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <!-- 5. Referral -->
-                    <div x-show="view === 'member_referral'" x-cloak>
-                         <h2 class="text-2xl font-bold mb-6">Sistem Afiliasi</h2>
-                         
-                         <!-- Referral Link -->
-                         <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 mb-8 text-center">
-                             <p class="text-gray-400 text-sm mb-2">Kode Referral Anda</p>
-                             <div class="flex items-center justify-center gap-4 mb-4">
-                                 <div class="text-3xl font-mono font-bold text-white tracking-widest bg-gray-900 px-4 py-2 rounded border border-gray-600 select-all">JURAGAN99</div>
-                                 <button class="text-indigo-400 hover:text-indigo-300"><i class="fas fa-copy text-xl"></i></button>
-                             </div>
-                             <p class="text-xs text-gray-500">Bagikan kode ini untuk mendapatkan komisi 3 level!</p>
-                         </div>
-
-                         <div class="grid grid-cols-3 gap-4 mb-8 text-center">
-                             <div class="bg-gray-800 p-4 rounded-lg border-t-4 border-indigo-500">
-                                 <p class="text-gray-400 text-xs">Level 1 (10%)</p>
-                                 <p class="text-xl font-bold">12 Member</p>
-                             </div>
-                             <div class="bg-gray-800 p-4 rounded-lg border-t-4 border-purple-500">
-                                 <p class="text-gray-400 text-xs">Level 2 (5%)</p>
-                                 <p class="text-xl font-bold">45 Member</p>
-                             </div>
-                             <div class="bg-gray-800 p-4 rounded-lg border-t-4 border-pink-500">
-                                 <p class="text-gray-400 text-xs">Level 3 (2%)</p>
-                                 <p class="text-xl font-bold">120 Member</p>
-                             </div>
-                         </div>
-                         
-                         <h3 class="font-bold mb-4">Riwayat Komisi Terakhir</h3>
-                         <div class="bg-gray-800 rounded-lg overflow-hidden">
-                             <div class="p-4 border-b border-gray-700 flex justify-between text-sm">
-                                 <span>User001 Upgrade VIP 1</span>
-                                 <span class="text-green-400 font-bold">+ Rp 15.000</span>
-                             </div>
-                             <div class="p-4 border-b border-gray-700 flex justify-between text-sm">
-                                 <span>User992 Upgrade VIP 2</span>
-                                 <span class="text-green-400 font-bold">+ Rp 50.000</span>
-                             </div>
-                         </div>
-                    </div>
-
-                </div>
-
-                <!-- Mobile Bottom Nav (Member Only) -->
-                <div x-show="currentUser.role === 'member'" class="md:hidden fixed bottom-0 w-full bg-gray-800 border-t border-gray-700 flex justify-around py-3 z-50">
-                    <button @click="view = 'member_dashboard'" :class="view === 'member_dashboard' ? 'text-indigo-500' : 'text-gray-500'" class="flex flex-col items-center text-xs">
-                        <i class="fas fa-home text-lg mb-1"></i> Home
-                    </button>
-                    <button @click="view = 'member_jobs'" :class="view === 'member_jobs' ? 'text-indigo-500' : 'text-gray-500'" class="flex flex-col items-center text-xs">
-                        <i class="fas fa-play-circle text-lg mb-1"></i> Misi
-                    </button>
-                    <button @click="view = 'member_vip'" :class="view === 'member_vip' ? 'text-indigo-500' : 'text-gray-500'" class="flex flex-col items-center text-xs">
-                        <i class="fas fa-crown text-lg mb-1"></i> VIP
-                    </button>
-                    <button @click="view = 'member_referral'" :class="view === 'member_referral' ? 'text-indigo-500' : 'text-gray-500'" class="flex flex-col items-center text-xs">
-                        <i class="fas fa-users text-lg mb-1"></i> Tim
-                    </button>
-                </div>
-            </main>
-        </div>
-    </template>
-
-    <script>
-        function membershipApp() {
+        // Expose the Alpine component function globally
+        window.membershipApp = function() {
             return {
+                loading: true,
                 loggedIn: false,
-                view: 'member_dashboard', // admin_dashboard, admin_plans, member_dashboard, do_job, etc.
-                isFocused: true,
-                jobInProgress: false,
-                jobTimer: 0,
-                timerInterval: null,
-                activeJob: null,
-                currentSlide: 0,
-                loginForm: { username: '' },
-                runningText: "Selamat datang User001! Selamat atas penarikan Rp 500.000 hari ini. | Promo Deposit Bonus 10% Hanya Hari Ini!",
+                userId: 'N/A',
+                membershipData: null,
                 
-                // Mock Database
-                users: [
-                    { id: 1, username: 'user1', role: 'member', plan_id: 1, balance: 0, status: 'active', tasks_done: 0, today_income: 0 },
-                    { id: 2, username: 'sultan88', role: 'member', plan_id: 3, balance: 1500000, status: 'active', tasks_done: 2, today_income: 25000 },
-                    { id: 3, username: 'admin', role: 'admin', plan_id: 0, balance: 0, status: 'active', tasks_done: 0, today_income: 0 },
-                ],
-                plans: [
-                    { id: 1, name: 'Basic (Trial)', price: 0, duration: 3, daily_jobs: 2, return_capital: false, watch_seconds: 10, thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&q=80' },
-                    { id: 2, name: 'Silver Plan', price: 100000, duration: 30, daily_jobs: 5, return_capital: false, watch_seconds: 15, thumbnail: 'https://images.unsplash.com/photo-1633158829585-23ba8f7c8caf?w=400&q=80' },
-                    { id: 3, name: 'Gold Investment', price: 500000, duration: 45, daily_jobs: 10, return_capital: true, watch_seconds: 20, thumbnail: 'https://images.unsplash.com/photo-1621504450168-38c6814ccb59?w=400&q=80' },
-                ],
-                jobs: [
-                    { id: 101, title: 'Review Gadget Terbaru 2024', url: 'https://www.youtube.com/watch?v=LXb3EKWsInQ', reward: 2500 },
-                    { id: 102, title: 'Tutorial Coding Hono JS', url: 'https://www.youtube.com/watch?v=ysz5S6P_z-U', reward: 2500 },
-                    { id: 103, title: 'Pemandangan Alam 4K', url: 'https://www.youtube.com/watch?v=hN729i6H1u0', reward: 2500 },
-                ],
-                sliderImages: [
-                    'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80',
-                    'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=800&q=80',
-                ],
-
-                currentUser: {}, // Akan diisi saat login
-
-                get currentPlan() {
-                    if (!this.currentUser.plan_id) return {};
-                    return this.plans.find(p => p.id === this.currentUser.plan_id) || this.plans[0];
-                },
-
                 init() {
-                    // Focus Detection Logic
-                    document.addEventListener("visibilitychange", () => {
-                        this.handleVisibilityChange();
-                    });
-                    window.addEventListener("blur", () => this.handleVisibilityChange());
-                    window.addEventListener("focus", () => this.handleVisibilityChange());
-
-                    // Auto slider
-                    setInterval(() => { this.nextSlide() }, 5000);
-                },
-
-                login() {
-                    const username = this.loginForm.username.toLowerCase();
-                    const user = this.users.find(u => u.username === username);
-                    
-                    if (user) {
-                        this.currentUser = user;
-                        this.loggedIn = true;
-                        this.view = user.role === 'admin' ? 'admin_dashboard' : 'member_dashboard';
-                    } else {
-                        // Create temp user for demo if not found
-                        alert("User demo dibuat!");
-                        const newUser = { id: Date.now(), username: username, role: 'member', plan_id: 1, balance: 0, status: 'active', tasks_done: 0, today_income: 0 };
-                        this.users.push(newUser);
-                        this.currentUser = newUser;
-                        this.loggedIn = true;
+                    console.log("App initializing...");
+                    // 1. Initialize Firebase App
+                    try {
+                        const app = initializeApp(firebaseConfig);
+                        auth = getAuth(app);
+                        db = getFirestore(app);
+                    } catch (e) {
+                        console.error("Firebase initialization failed:", e);
+                        this.loading = false;
+                        return;
                     }
-                },
 
-                logout() {
-                    this.loggedIn = false;
-                    this.stopJobTimer();
-                    this.currentUser = {};
-                    this.loginForm.username = '';
-                },
+                    // 2. Handle Authentication
+                    onAuthStateChanged(auth, async (user) => {
+                        this.loading = true;
+                        if (user) {
+                            // User is signed in
+                            userId = user.uid;
+                            this.userId = userId;
+                            this.loggedIn = true;
+                            console.log("Auth state changed. User ID:", userId);
 
-                // Slider Logic
-                nextSlide() { this.currentSlide = (this.currentSlide + 1) % this.sliderImages.length; },
-                prevSlide() { this.currentSlide = (this.currentSlide - 1 + this.sliderImages.length) % this.sliderImages.length; },
+                            // 3. Start Firestore Listener for Membership Data
+                            this.startDataListener(userId);
+                            this.loading = false;
 
-                // Formatting
-                formatRupiah(number) {
-                    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(number);
-                },
-                getDateString() {
-                    return new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                },
-                getPlanName(id) {
-                    const plan = this.plans.find(p => p.id === id);
-                    return plan ? plan.name : 'Unknown';
-                },
-                formatTime(seconds) {
-                    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-                    const s = (seconds % 60).toString().padStart(2, '0');
-                    return `${m}:${s}`;
-                },
-                getEmbedUrl(url) {
-                    // Simple regex to get ID from generic youtube url
-                    // Demo purpose only
-                    return "https://www.youtube.com/embed/LXb3EKWsInQ?autoplay=1&mute=1&controls=0"; // Hardcoded video for demo stability
-                },
-
-                // Job Logic
-                startJob(job) {
-                    this.activeJob = job;
-                    this.jobTimer = this.currentPlan.watch_seconds;
-                    this.view = 'do_job';
-                    this.jobInProgress = true;
-                    this.startTimer();
-                },
-
-                startTimer() {
-                    if (this.timerInterval) clearInterval(this.timerInterval);
-                    this.timerInterval = setInterval(() => {
-                        if (this.isFocused && this.jobTimer > 0) {
-                            this.jobTimer--;
-                        } else if (this.jobTimer <= 0) {
-                            clearInterval(this.timerInterval);
+                        } else {
+                            // User is signed out or first time load. Sign in.
+                            try {
+                                if (initialAuthToken) {
+                                    await signInWithCustomToken(auth, initialAuthToken);
+                                } else {
+                                    // Fallback to anonymous sign-in if token is missing
+                                    await signInAnonymously(auth);
+                                }
+                                // The onAuthStateChanged listener will catch the successful sign-in
+                            } catch (error) {
+                                console.error("Authentication failed:", error);
+                                this.loggedIn = false;
+                                this.loading = false;
+                            }
                         }
-                    }, 1000);
+                    });
                 },
 
-                stopJobTimer() {
-                    clearInterval(this.timerInterval);
-                    this.jobInProgress = false;
-                    this.activeJob = null;
+                startDataListener(uid) {
+                    // Stop previous listener if exists
+                    unsubscribe(); 
+
+                    // Define the document path: private data for the current user
+                    // Path: /artifacts/{appId}/users/{userId}/membershipData/status
+                    const docPath = `/artifacts/${appId}/users/${uid}/membershipData/status`;
+                    const statusRef = doc(db, docPath);
+
+                    // Set up real-time listener
+                    unsubscribe = onSnapshot(statusRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            console.log("Membership data received:", docSnap.data());
+                            this.membershipData = docSnap.data();
+                        } else {
+                            console.log("No membership data found in Firestore.");
+                            this.membershipData = null;
+                        }
+                    }, (error) => {
+                        console.error("Firestore subscription error:", error);
+                    });
                 },
 
-                handleVisibilityChange() {
-                    if (document.hidden || !document.hasFocus()) {
-                        this.isFocused = false;
-                    } else {
-                        this.isFocused = true;
+                async createInitialData() {
+                    if (!db || !this.userId) return;
+
+                    const initialData = {
+                        plan: 'Basic',
+                        active: true,
+                        joinDate: new Date().toISOString(),
+                        lastUpdated: new Date().toISOString()
+                    };
+                    
+                    const docPath = `/artifacts/${appId}/users/${this.userId}/membershipData/status`;
+                    try {
+                        await setDoc(doc(db, docPath), initialData);
+                        console.log("Initial data created successfully.");
+                    } catch (e) {
+                        console.error("Error creating document:", e);
                     }
                 },
 
-                claimReward() {
-                    if (!this.activeJob) return;
+                async updateMembership() {
+                    if (!db || !this.userId || !this.membershipData) return;
                     
-                    this.currentUser.balance += this.activeJob.reward;
-                    this.currentUser.today_income += this.activeJob.reward;
-                    this.currentUser.tasks_done += 1;
+                    const docPath = `/artifacts/${appId}/users/${this.userId}/membershipData/status`;
+                    const newPlan = this.membershipData.plan === 'Basic' ? 'Premium' : 'Basic';
                     
-                    alert(`Selamat! Saldo bertambah ${this.formatRupiah(this.activeJob.reward)}`);
-                    
-                    this.stopJobTimer();
-                    this.view = 'member_jobs';
-                },
+                    const newData = {
+                        ...this.membershipData,
+                        plan: newPlan,
+                        lastUpdated: new Date().toISOString()
+                    };
 
-                // Admin Logic
-                toggleUserStatus(id) {
-                    const user = this.users.find(u => u.id === id);
-                    if (user) {
-                        user.status = user.status === 'active' ? 'inactive' : 'active';
+                    try {
+                        await setDoc(doc(db, docPath), newData); // Using setDoc to fully replace/update
+                        console.log(`Membership updated to ${newPlan}.`);
+                    } catch (e) {
+                        console.error("Error updating document:", e);
                     }
-                },
-                openModal(type) {
-                    alert('Di versi full, ini akan membuka modal form input ' + type);
                 }
             }
         }
