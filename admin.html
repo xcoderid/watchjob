@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Admin Panel - AdView</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('adminApp', () => ({
+                token: localStorage.getItem('token'),
+                user: JSON.parse(localStorage.getItem('user') || '{}'),
+                view: 'dashboard',
+                toast: { show: false, msg: '', type: 'success' },
+                
+                stats: { users:0, deposit:0, pending_wd:0, pending_depo:0 },
+                pendingTx: [],
+                users: [],
+                plans: [],
+                settings: { running_text: '', l1:0, l2:0, l3:0 },
+
+                forms: {
+                    job: { title: '', url: '', min_plan: 1 },
+                    plan: { name: '', price: '', duration: 30, daily_jobs: 5, commission: 100, return_capital: false, thumbnail: '' }
+                },
+
+                async init() {
+                    if (!this.token || this.user.role !== 'admin') {
+                        window.location.href = 'index.html';
+                        return;
+                    }
+                    await this.loadData();
+                },
+
+                async api(url, method = 'GET', body = null) {
+                    const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` } };
+                    if (body) opts.body = JSON.stringify(body);
+                    const res = await fetch(`/api${url}`, opts);
+                    return await res.json();
+                },
+
+                async loadData() {
+                    this.stats = await this.api('/admin?type=stats');
+                    this.pendingTx = await this.api('/admin?type=pending_tx');
+                    this.users = await this.api('/admin?type=users');
+                    this.plans = await this.api('/admin?type=plans');
+                    const s = await this.api('/admin?type=settings');
+                    this.settings = { 
+                        l1: s.l1 || 10, l2: s.l2 || 5, l3: s.l3 || 2, 
+                        running_text: s.running_text || '' 
+                    };
+                },
+
+                async processTx(id, decision) {
+                    if(!confirm(decision==='approve'?'Setujui?':'Tolak?')) return;
+                    await this.api('/admin', 'POST', { action: 'process_tx', tx_id: id, decision });
+                    this.showToast('Transaksi Diproses');
+                    this.loadData();
+                },
+
+                async createJob() {
+                    await this.api('/admin', 'POST', { action: 'create_job', ...this.forms.job });
+                    this.showToast('Job Ditambahkan');
+                    this.forms.job.title = '';
+                },
+
+                async createPlan() {
+                    const p = this.forms.plan;
+                    await this.api('/admin', 'POST', { 
+                        action: 'create_plan', 
+                        name: p.name, price: parseFloat(p.price), duration: parseInt(p.duration),
+                        daily_jobs: parseInt(p.daily_jobs), commission: parseFloat(p.commission),
+                        return_capital: p.return_capital, thumbnail: p.thumbnail 
+                    });
+                    this.showToast('Plan Dibuat');
+                    this.loadData();
+                },
+
+                async saveSettings() {
+                    await this.api('/admin', 'POST', { action: 'update_settings', ...this.settings });
+                    this.showToast('Pengaturan Disimpan');
+                },
+
+                async toggleUser(uid, status) {
+                    await this.api('/admin', 'POST', { action: 'user_action', user_id: uid, type: status==='active'?'ban':'unban' });
+                    this.loadData();
+                },
+
+                logout() {
+                    localStorage.clear();
+                    window.location.href = 'index.html';
+                },
+                
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
+                showToast(msg, type='success') { this.toast = { show: true, msg, type }; setTimeout(() => this.toast.show = false, 3000); }
+            }));
+        });
+    </script>
+    <style>[x-cloak] { display: none !important; } .no-scrollbar::-webkit-scrollbar { display: none; }</style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col overflow-hidden" x-data="adminApp">
+
+    <!-- Toast -->
+    <div class="fixed top-5 right-5 z-50" x-show="toast.show" x-transition x-cloak>
+        <div :class="toast.type==='error'?'bg-red-600':'bg-emerald-600'" class="text-white px-4 py-2 rounded shadow-lg text-sm font-bold flex items-center gap-2">
+            <span x-text="toast.msg"></span>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md">
+        <div class="flex items-center gap-3"><div class="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center font-bold">A</div><h1 class="font-bold">Admin Panel</h1></div>
+        <button @click="logout" class="bg-slate-800 hover:bg-red-600 px-3 py-1 rounded text-xs font-bold transition">LOGOUT</button>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white border-r flex flex-col">
+            <nav class="flex-1 p-4 space-y-1">
+                <button @click="view='dashboard'" :class="view==='dashboard'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-gauge"></i> Dashboard</button>
+                <button @click="view='approvals'" :class="view==='approvals'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-check-to-slot"></i> Approvals <span x-show="stats.pending_wd+stats.pending_depo > 0" class="bg-red-500 text-white text-[10px] px-1.5 rounded-full" x-text="stats.pending_wd+stats.pending_depo"></span></button>
+                <button @click="view='users'" :class="view==='users'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-users"></i> Users</button>
+                <button @click="view='content'" :class="view==='content'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-box-open"></i> Content</button>
+                <button @click="view='settings'" :class="view==='settings'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-gear"></i> Settings</button>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto bg-slate-50 p-8">
+            
+            <!-- DASHBOARD -->
+            <div x-show="view==='dashboard'" class="space-y-6">
+                <h2 class="text-2xl font-bold text-slate-800">Ringkasan</h2>
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-emerald-500"><p class="text-slate-400 text-sm font-bold uppercase">Total Deposit</p><h3 class="text-3xl font-bold text-slate-800" x-text="fmtMoney(stats.deposit)"></h3></div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500"><p class="text-slate-400 text-sm font-bold uppercase">Total User</p><h3 class="text-3xl font-bold text-slate-800" x-text="stats.users"></h3></div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500"><p class="text-slate-400 text-sm font-bold uppercase">Pending WD</p><h3 class="text-3xl font-bold text-slate-800" x-text="stats.pending_wd"></h3></div>
+                </div>
+            </div>
+
+            <!-- APPROVALS -->
+            <div x-show="view==='approvals'" class="space-y-6">
+                <h2 class="text-2xl font-bold text-slate-800">Permintaan Approval</h2>
+                <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs"><tr><th class="p-4">Tipe</th><th class="p-4">User</th><th class="p-4">Jumlah</th><th class="p-4">Info</th><th class="p-4 text-right">Aksi</th></tr></thead>
+                        <tbody class="divide-y">
+                            <template x-for="tx in pendingTx" :key="tx.id">
+                                <tr>
+                                    <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="tx.type==='deposit'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'" x-text="tx.type"></span></td>
+                                    <td class="p-4 font-bold" x-text="tx.username"></td>
+                                    <td class="p-4" x-text="fmtMoney(tx.amount)"></td>
+                                    <td class="p-4 text-xs text-slate-500" x-text="tx.description"></td>
+                                    <td class="p-4 text-right space-x-2">
+                                        <button @click="processTx(tx.id, 'approve')" class="bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-emerald-600">TERIMA</button>
+                                        <button @click="processTx(tx.id, 'reject')" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-red-600">TOLAK</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="!pendingTx.length"><td colspan="5" class="p-8 text-center text-slate-400">Tidak ada transaksi pending.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- USERS -->
+            <div x-show="view==='users'" class="space-y-6">
+                <h2 class="text-2xl font-bold text-slate-800">Manajemen User</h2>
+                <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs"><tr><th class="p-4">Username</th><th class="p-4">Email</th><th class="p-4">Saldo</th><th class="p-4">Status</th><th class="p-4 text-right">Aksi</th></tr></thead>
+                        <tbody class="divide-y">
+                            <template x-for="u in users" :key="u.id">
+                                <tr>
+                                    <td class="p-4 font-bold" x-text="u.username"></td>
+                                    <td class="p-4" x-text="u.email"></td>
+                                    <td class="p-4" x-text="fmtMoney(u.balance)"></td>
+                                    <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="u.status==='active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'" x-text="u.status"></span></td>
+                                    <td class="p-4 text-right">
+                                        <button @click="toggleUser(u.id, u.status)" class="border border-slate-300 px-3 py-1 rounded text-xs font-bold hover:bg-slate-50" x-text="u.status==='active'?'BAN USER':'UNBAN'"></button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CONTENT -->
+            <div x-show="view==='content'" class="space-y-6">
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Add Job -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border">
+                        <h3 class="font-bold mb-4">Tambah Misi Video</h3>
+                        <div class="space-y-3">
+                            <input x-model="forms.job.url" placeholder="Link Youtube" class="w-full p-2 border rounded text-sm">
+                            <input x-model="forms.job.title" placeholder="Judul Video" class="w-full p-2 border rounded text-sm">
+                            <select x-model="forms.job.min_plan" class="w-full p-2 border rounded text-sm"><template x-for="p in plans" :key="p.id"><option :value="p.id" x-text="p.name"></option></template></select>
+                            <button @click="createJob" class="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold w-full">POSTING</button>
+                        </div>
+                    </div>
+                    <!-- Add Plan -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border">
+                        <h3 class="font-bold mb-4">Buat Paket Baru</h3>
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <input x-model="forms.plan.name" placeholder="Nama Paket" class="p-2 border rounded text-sm">
+                            <input x-model="forms.plan.price" type="number" placeholder="Harga" class="p-2 border rounded text-sm">
+                            <input x-model="forms.plan.daily_jobs" type="number" placeholder="Limit Job" class="p-2 border rounded text-sm">
+                            <input x-model="forms.plan.commission" type="number" placeholder="Komisi" class="p-2 border rounded text-sm">
+                            <input x-model="forms.plan.duration" type="number" placeholder="Durasi (hari)" class="p-2 border rounded text-sm">
+                            <input x-model="forms.plan.thumbnail" placeholder="URL Gambar" class="p-2 border rounded text-sm">
+                        </div>
+                        <div class="mb-3"><label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="forms.plan.return_capital"> Modal Kembali?</label></div>
+                        <button @click="createPlan" class="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold w-full">BUAT PAKET</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SETTINGS -->
+            <div x-show="view==='settings'" class="space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border max-w-2xl">
+                    <h3 class="font-bold mb-4">Konfigurasi Global</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm font-bold text-slate-500">Running Text</label>
+                            <textarea x-model="settings.running_text" class="w-full p-2 border rounded text-sm mt-1"></textarea>
+                        </div>
+                        <div>
+                            <label class="text-sm font-bold text-slate-500">Affiliate Commission (%)</label>
+                            <div class="grid grid-cols-3 gap-4 mt-1">
+                                <div><span class="text-xs text-slate-400">Level 1</span><input x-model="settings.l1" class="w-full p-2 border rounded"></div>
+                                <div><span class="text-xs text-slate-400">Level 2</span><input x-model="settings.l2" class="w-full p-2 border rounded"></div>
+                                <div><span class="text-xs text-slate-400">Level 3</span><input x-model="settings.l3" class="w-full p-2 border rounded"></div>
+                            </div>
+                        </div>
+                        <button @click="saveSettings" class="bg-emerald-500 text-white px-6 py-2 rounded font-bold text-sm">SIMPAN PERUBAHAN</button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+</body>
+</html>
