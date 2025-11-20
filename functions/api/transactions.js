@@ -1,35 +1,41 @@
-import { jsonResponse, getUserBalance } from '../utils';
+import { jsonResponse, authenticateUser, getUserBalance } from '../utils';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const url = new URL(request.url);
-  const userId = url.searchParams.get('user_id');
+  
+  const user = await authenticateUser(env, request);
+  if (!user) return jsonResponse({ error: 'Unauthorized' }, 401);
 
-  if (!userId) return jsonResponse({ error: 'User ID required' }, 400);
-
-  const transactions = await env.DB.prepare(`SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`).bind(userId).all();
+  const transactions = await env.DB.prepare(`SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`).bind(user.id).all();
   return jsonResponse(transactions.results);
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const body = await request.json();
-  const { user_id, type, amount, method, account_info } = body; 
-
-  if (amount <= 0) return jsonResponse({ error: 'Jumlah harus > 0' }, 400);
   
-  if (type === 'withdrawal') {
-     const balance = await getUserBalance(env, user_id);
-     if (balance < amount) return jsonResponse({ error: 'Saldo tidak mencukupi.' }, 400);
-  }
+  const user = await authenticateUser(env, request);
+  if (!user) return jsonResponse({ error: 'Unauthorized' }, 401);
 
+  const body = await request.json();
+  const { type, amount, method, account_info } = body; 
+
+  if (!amount || isNaN(amount) || amount <= 0) return jsonResponse({ error: 'Jumlah tidak valid' }, 400);
+  
   try {
-    let desc = type === 'deposit' ? `Deposit via ${method}` : `Withdraw ke ${account_info}`;
-    let status = type === 'deposit' ? 'success' : 'pending';
-    
-    await env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, ?, ?, ?, ?)`).bind(user_id, type, amount, desc, status).run();
+    if (type === 'withdrawal') {
+       const balance = await getUserBalance(env, user.id);
+       if (balance < amount) return jsonResponse({ error: 'Saldo tidak mencukupi untuk penarikan.' }, 400);
+    }
 
-    return jsonResponse({ success: true, message: `${type} berhasil diajukan.` });
+    let desc = type === 'deposit' ? `Deposit via ${method}` : `Withdraw ke ${account_info}`;
+    let status = type === 'deposit' ? 'pending' : 'pending'; // Deposit now defaults to pending for admin check
+    
+    // Auto-approve deposit demo (Optional: remove in production)
+    // if (type === 'deposit') status = 'success'; 
+
+    await env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, ?, ?, ?, ?)`).bind(user.id, type, amount, desc, status).run();
+
+    return jsonResponse({ success: true, message: `${type === 'deposit' ? 'Deposit' : 'Penarikan'} berhasil diajukan. Menunggu persetujuan Admin.` });
 
   } catch (e) {
     return jsonResponse({ error: 'Error: ' + e.message }, 500);
