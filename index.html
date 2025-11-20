@@ -50,7 +50,7 @@
                     register: { username: '', email: '', password: '', ref_code: '' },
                     deposit: { amount: '', method: 'Bank Transfer' },
                     withdraw: { amount: '', account: '' },
-                    promo: ''
+                    walletTab: 'depo'
                 },
 
                 // Player
@@ -73,6 +73,7 @@
                         const res = await fetch(`/api${endpoint}`, { method, headers, body: body ? JSON.stringify(body) : null });
                         const json = await res.json();
                         if (!res.ok) {
+                            // Auto logout jika token expired atau unauthorized (401/403)
                             if (res.status === 401 || res.status === 403) this.logout();
                             throw new Error(json.error || 'Terjadi kesalahan server');
                         }
@@ -86,13 +87,20 @@
                 // --- DATA SYNC ---
                 async refreshData() {
                     if(!this.user) return;
+                    
+                    // Jika Admin, redirect ke admin.html (jangan load data user di sini)
+                    if(this.user.role === 'admin') {
+                        window.location.href = 'admin.html';
+                        return;
+                    }
+
                     try {
-                        const [uRes, jRes, pRes, tRes, sRes] = await Promise.all([
+                        // PERBAIKAN: Hapus pemanggilan API admin yang menyebabkan error 403 pada user biasa
+                        const [uRes, jRes, pRes, tRes] = await Promise.all([
                             this.api(`/users?id=${this.user.id}`),
                             this.api(`/jobs`),
                             this.api(`/plans`),
-                            this.api(`/transactions`),
-                            this.api(`/admin?type=settings`).catch(()=>({})) // Fail silent for non-admin
+                            this.api(`/transactions`)
                         ]);
                         
                         this.user = { ...this.user, ...uRes.user };
@@ -101,7 +109,11 @@
                         this.completedIds = jRes.completed_ids;
                         this.plans = pRes;
                         this.transactions = tRes;
-                        if(sRes.running_text) this.settings = sRes;
+                        
+                        // Ambil running text dari respon users.js (Pastikan backend users.js sudah mengembalikannya)
+                        if(uRes.running_text) {
+                            this.settings.running_text = uRes.running_text;
+                        }
 
                         localStorage.setItem('user', JSON.stringify(this.user));
                     } catch(e) { console.log("Refresh failed", e); }
@@ -146,6 +158,7 @@
                     this.token = null;
                     this.user = null;
                     this.view = 'home';
+                    this.authMode = 'login';
                 },
 
                 // --- FEATURES ---
@@ -244,7 +257,7 @@
                     <button @click="authMode='register'" :class="authMode==='register'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-2 text-sm font-bold rounded-md transition">Daftar</button>
                 </div>
 
-                <!-- LOGIN FORM -->
+                <!-- LOGIN FORM (TERPISAH UNTUK MENGHINDARI BUG BINDING) -->
                 <form x-show="authMode==='login'" @submit.prevent="login()" class="space-y-4">
                     <div>
                         <input x-model="forms.login.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username" required>
@@ -258,7 +271,7 @@
                     </button>
                 </form>
 
-                <!-- REGISTER FORM -->
+                <!-- REGISTER FORM (TERPISAH) -->
                 <form x-show="authMode==='register'" @submit.prevent="register()" class="space-y-4">
                     <div>
                         <input x-model="forms.register.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username Baru" required>
