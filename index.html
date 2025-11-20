@@ -3,98 +3,345 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AdView Pro Mobile</title>
-    
+    <title>AdView Pro - Watch to Earn</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- LOGIKA APLIKASI (WAJIB DISINI SEBELUM ALPINE) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    
     <script>
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: { primary: '#6366f1', secondary: '#1e293b', accent: '#f59e0b' },
-                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                    colors: { primary: '#4f46e5', secondary: '#1e293b', accent: '#f59e0b' },
+                    animation: { 'marquee': 'marquee 20s linear infinite' },
+                    keyframes: { marquee: { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(-100%)' } } }
                 }
             }
         }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        iframe { pointer-events: none; } /* Mencegah klik langsung ke YouTube */
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased" x-data="app()" x-init="init()">
 
-        function appData() {
-            return {
-                // Core States
-                authView: 'login', 
-                view: 'home', 
-                loading: false,
-                user: null, 
-                token: null, 
-                plan: null,
+    <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100]" x-cloak x-show="toast.show" x-transition.opacity.duration.500ms>
+        <div :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'" class="text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 font-bold text-sm">
+            <i :class="toast.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'" class="fa-solid"></i>
+            <span x-text="toast.msg"></span>
+        </div>
+    </div>
+
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden">
+        
+        <template x-if="!token">
+            <div class="flex-1 flex flex-col justify-center p-8">
+                <div class="text-center mb-10">
+                    <div class="w-20 h-20 bg-primary rounded-2xl mx-auto flex items-center justify-center text-white text-3xl mb-4 shadow-lg"><i class="fa-solid fa-play"></i></div>
+                    <h1 class="text-2xl font-bold text-slate-800">AdView Pro</h1>
+                    <p class="text-slate-400 text-sm">Tonton Iklan, Dapat Cuan</p>
+                </div>
                 
-                // Member Data
-                jobs: [], 
-                plansList: [], 
-                history: [], 
-                completedJobIds: [],
-                userCommission: 0,
+                <div class="bg-slate-100 p-1 rounded-xl flex mb-6">
+                    <button @click="authMode='login'" :class="authMode==='login'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-3 rounded-lg font-bold text-sm transition-all">Masuk</button>
+                    <button @click="authMode='register'" :class="authMode==='register'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-3 rounded-lg font-bold text-sm transition-all">Daftar</button>
+                </div>
+
+                <form @submit.prevent="authSubmit" class="space-y-4">
+                    <input x-model="forms.auth.username" type="text" placeholder="Username" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-primary" required>
+                    <div x-show="authMode==='register'">
+                        <input x-model="forms.auth.email" type="email" placeholder="Email" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-primary mb-4">
+                        <input x-model="forms.auth.referral_code" type="text" placeholder="Kode Referral (Opsional)" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-primary mb-4">
+                    </div>
+                    <input x-model="forms.auth.password" type="password" placeholder="Password" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-primary" required>
+                    <button type="submit" class="w-full py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 hover:bg-indigo-700 transition" x-text="loading ? 'Memuat...' : (authMode==='login'?'MASUK SEKARANG':'DAFTAR GRATIS')" :disabled="loading"></button>
+                </form>
+            </div>
+        </template>
+
+        <template x-if="token && user">
+            <div class="flex flex-col h-screen">
+                
+                <header class="bg-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-sm" x-show="view !== 'do_job'">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-primary font-bold text-lg" x-text="user.username[0].toUpperCase()"></div>
+                        <div>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Saldo Anda</p>
+                            <p class="font-bold text-slate-800" x-text="formatIdr(user.balance)"></p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold border border-amber-200" x-text="plan ? plan.name : 'Free'"></span>
+                    </div>
+                </header>
+
+                <div x-show="view==='home'" class="bg-secondary text-white text-xs py-2 overflow-hidden whitespace-nowrap relative z-20">
+                    <div class="inline-block animate-marquee" x-text="settings.running_text || 'Selamat Datang di AdView Pro'"></div>
+                </div>
+
+                <main class="flex-1 overflow-y-auto bg-slate-50 pb-24 relative">
+                    
+                    <div x-show="view==='home'" class="p-4 space-y-5 animate-fade-in">
+                        <div class="w-full h-40 bg-gradient-to-r from-primary to-purple-600 rounded-2xl shadow-lg flex items-center justify-center text-white p-6 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 opacity-10 transform translate-x-4 -translate-y-4"><i class="fa-solid fa-wallet text-9xl"></i></div>
+                            <div class="z-10 w-full">
+                                <p class="text-xs opacity-80 mb-1">Penghasilan Hari Ini</p>
+                                <h2 class="text-3xl font-bold mb-4" x-text="formatIdr(user.today_income)"></h2>
+                                <button @click="view='plans'" class="bg-white text-primary px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-100">Upgrade VIP</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-4 gap-2">
+                            <button @click="view='jobs'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-play-circle text-2xl text-red-500 mb-2"></i><span class="text-[10px] font-bold">Misi</span></button>
+                            <button @click="view='deposit'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-money-bill-transfer text-2xl text-green-500 mb-2"></i><span class="text-[10px] font-bold">Deposit</span></button>
+                            <button @click="view='referral'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-users text-2xl text-blue-500 mb-2"></i><span class="text-[10px] font-bold">Tim</span></button>
+                            <button @click="view='withdraw'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-building-columns text-2xl text-slate-500 mb-2"></i><span class="text-[10px] font-bold">Tarik</span></button>
+                        </div>
+                    </div>
+
+                    <div x-show="view==='jobs'" class="p-4 space-y-4">
+                        <h2 class="font-bold text-lg flex items-center gap-2"><i class="fa-brands fa-youtube text-red-600"></i> Misi Tersedia</h2>
+                        <div x-show="!jobs.length" class="text-center text-slate-400 py-10">Tidak ada misi untuk level Anda saat ini.</div>
+                        <template x-for="job in jobs" :key="job.id">
+                            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex gap-3 relative overflow-hidden">
+                                <div class="w-32 h-20 bg-black rounded-lg overflow-hidden relative flex-shrink-0">
+                                    <img :src="'https://img.youtube.com/vi/'+getVidId(job.youtube_url)+'/mqdefault.jpg'" class="w-full h-full object-cover opacity-80">
+                                    <div class="absolute inset-0 flex items-center justify-center text-white"><i class="fa-solid fa-play"></i></div>
+                                </div>
+                                <div class="flex-1 py-1">
+                                    <h3 class="font-bold text-sm line-clamp-2 leading-tight" x-text="job.title"></h3>
+                                    <div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                                        <span class="bg-slate-100 px-2 py-1 rounded flex items-center gap-1"><i class="fa-regular fa-clock"></i> <span x-text="job.duration+'s'"></span></span>
+                                        <span class="text-green-600 font-bold" x-text="'+ '+formatIdr(plan?.commission || 0)"></span>
+                                    </div>
+                                </div>
+                                <template x-if="completedIds.includes(job.id)">
+                                    <div class="absolute inset-0 bg-white/80 flex items-center justify-center z-10 backdrop-blur-[1px]">
+                                        <span class="text-green-600 font-bold text-sm"><i class="fa-solid fa-check-circle"></i> SELESAI</span>
+                                    </div>
+                                </template>
+                                <template x-if="!completedIds.includes(job.id)">
+                                    <button @click="startJob(job)" class="absolute bottom-3 right-3 bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg shadow hover:bg-indigo-700">Start</button>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div x-show="view==='do_job'" class="fixed inset-0 bg-black z-50 flex flex-col">
+                        <div class="flex justify-between items-center p-4 text-white bg-gradient-to-b from-black/80 to-transparent absolute top-0 left-0 right-0 z-20">
+                            <button @click="stopJob" class="text-sm font-bold bg-white/20 px-3 py-1 rounded-lg backdrop-blur">Keluar</button>
+                            <div class="bg-red-600 px-4 py-1 rounded-full text-sm font-bold animate-pulse flex items-center gap-2">
+                                <div class="w-2 h-2 bg-white rounded-full"></div>
+                                <span x-text="timer"></span>s
+                            </div>
+                        </div>
+                        
+                        <div x-show="!isFocused" class="absolute inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center text-white text-center p-10">
+                            <i class="fa-solid fa-eye text-4xl mb-4 text-red-500"></i>
+                            <h3 class="text-xl font-bold mb-2">PAUSED</h3>
+                            <p class="text-sm text-slate-400">Harap tetap di halaman ini untuk melanjutkan timer.</p>
+                        </div>
+
+                        <div class="flex-1 flex items-center justify-center bg-black">
+                            <div id="player-container" class="w-full aspect-video pointer-events-none">
+                                <iframe :src="'https://www.youtube.com/embed/'+getVidId(activeJob?.youtube_url)+'?autoplay=1&controls=0&rel=0&playsinline=1&enablejsapi=1'" class="w-full h-full" frameborder="0" allow="autoplay"></iframe>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 p-6 rounded-t-3xl text-white z-10">
+                            <h2 class="font-bold text-lg truncate mb-1" x-text="activeJob?.title"></h2>
+                            <p class="text-slate-400 text-xs mb-6">Tonton video sampai timer habis untuk klaim reward.</p>
+                            <button x-show="timer <= 0" @click="claimJob" class="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl shadow-lg transition transform active:scale-95">KLAIM REWARD</button>
+                            <button x-show="timer > 0" disabled class="w-full py-4 bg-slate-800 text-slate-500 font-bold rounded-xl cursor-not-allowed">Mohon Tunggu...</button>
+                        </div>
+                    </div>
+
+                    <div x-show="view==='plans'" class="p-4 space-y-6">
+                        <h2 class="font-bold text-xl text-center mb-4">Upgrade Level</h2>
+                        <template x-for="p in plansList" :key="p.id">
+                            <div class="bg-white rounded-2xl overflow-hidden shadow-lg border border-slate-100 transform transition hover:scale-[1.02]">
+                                <div class="relative h-32">
+                                    <img :src="p.thumbnail_url" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/600x300?text=VIP+PLAN'">
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-4">
+                                        <h3 class="text-white font-bold text-xl" x-text="p.name"></h3>
+                                    </div>
+                                    <div x-show="p.return_capital" class="absolute top-2 right-2 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-1 rounded shadow">MODAL KEMBALI</div>
+                                </div>
+                                <div class="p-5">
+                                    <div class="flex justify-between items-end mb-4 border-b pb-4 border-slate-100">
+                                        <div><p class="text-xs text-slate-400">Harga Paket</p><p class="text-xl font-bold text-primary" x-text="formatIdr(p.price)"></p></div>
+                                        <div class="text-right"><p class="text-xs text-slate-400">Durasi</p><p class="font-bold" x-text="p.duration_days + ' Hari'"></p></div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3 mb-4 text-xs">
+                                        <div class="bg-slate-50 p-2 rounded"><span class="block text-slate-400">Tugas/Hari</span><span class="font-bold text-sm" x-text="p.daily_jobs_limit"></span></div>
+                                        <div class="bg-slate-50 p-2 rounded"><span class="block text-slate-400">Komisi/Video</span><span class="font-bold text-sm" x-text="formatIdr(p.commission)"></span></div>
+                                    </div>
+                                    
+                                    <div class="flex gap-2 mb-4" x-data="{ code: '' }">
+                                        <input x-model="code" placeholder="Kode Kupon" class="flex-1 bg-slate-50 border rounded px-3 text-sm">
+                                        <button @click="buyPlan(p, code)" class="bg-secondary text-white px-4 rounded text-xs font-bold">BELI</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div x-show="view==='referral'" class="p-4 space-y-4">
+                        <div class="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl p-6 text-white text-center shadow-lg">
+                            <p class="text-xs opacity-80">Kode Referral Anda</p>
+                            <h2 class="text-3xl font-bold my-2 tracking-widest" x-text="user.referral_code"></h2>
+                            <button @click="copyRef" class="bg-white/20 backdrop-blur px-4 py-2 rounded-full text-xs font-bold mt-2">Salin Kode</button>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl p-4 shadow-sm">
+                            <h3 class="font-bold mb-4 text-sm uppercase text-slate-400">Komisi Tim (3 Level)</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center border-b pb-2">
+                                    <span>Level 1 <span class="text-xs text-slate-400 bg-slate-100 px-1 rounded" x-text="settings.affiliate_l1+'%'"></span></span>
+                                    <span class="font-bold text-primary">Langsung</span>
+                                </div>
+                                <div class="flex justify-between items-center border-b pb-2">
+                                    <span>Level 2 <span class="text-xs text-slate-400 bg-slate-100 px-1 rounded" x-text="settings.affiliate_l2+'%'"></span></span>
+                                    <span class="font-bold text-primary">Teman dari Teman</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span>Level 3 <span class="text-xs text-slate-400 bg-slate-100 px-1 rounded" x-text="settings.affiliate_l3+'%'"></span></span>
+                                    <span class="font-bold text-primary">Jaringan</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div x-show="view==='admin'" class="p-4 pb-24 space-y-6">
+                        <h2 class="font-bold text-xl">Admin Panel</h2>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500"><p class="text-xs text-slate-400">Total User</p><h3 class="text-xl font-bold" x-text="adminData.stats.users"></h3></div>
+                            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500"><p class="text-xs text-slate-400">Total Deposit</p><h3 class="text-xl font-bold" x-text="formatIdr(adminData.stats.deposit)"></h3></div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                             <button @click="adminView='add_job'" class="bg-secondary text-white py-3 rounded-xl text-sm font-bold">Tambah Job</button>
+                             <button @click="adminView='settings'" class="bg-secondary text-white py-3 rounded-xl text-sm font-bold">Pengaturan</button>
+                        </div>
+
+                        <div x-show="adminView==='settings'" class="bg-white p-4 rounded-xl shadow">
+                            <h3 class="font-bold mb-4">Pengaturan Situs</h3>
+                            <div class="space-y-3">
+                                <label class="text-xs font-bold">Running Text</label>
+                                <textarea x-model="forms.settings.running_text" class="w-full p-2 border rounded text-sm"></textarea>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <div><label class="text-xs">Aff L1 (%)</label><input x-model="forms.settings.l1" class="w-full p-2 border rounded"></div>
+                                    <div><label class="text-xs">Aff L2 (%)</label><input x-model="forms.settings.l2" class="w-full p-2 border rounded"></div>
+                                    <div><label class="text-xs">Aff L3 (%)</label><input x-model="forms.settings.l3" class="w-full p-2 border rounded"></div>
+                                </div>
+                                <button @click="saveSettings" class="w-full py-2 bg-primary text-white rounded text-xs font-bold">Simpan</button>
+                            </div>
+                        </div>
+
+                        <div x-show="adminView==='add_job'" class="bg-white p-4 rounded-xl shadow">
+                            <h3 class="font-bold mb-4">Tambah Job Baru</h3>
+                            <input x-model="forms.job.title" placeholder="Judul Video" class="w-full p-2 border rounded mb-3">
+                            <input x-model="forms.job.url" placeholder="Link Youtube (Apapun)" class="w-full p-2 border rounded mb-3">
+                            <select x-model="forms.job.min_plan" class="w-full p-2 border rounded mb-3">
+                                <template x-for="p in plansList" :key="p.id"><option :value="p.id" x-text="p.name"></option></template>
+                            </select>
+                            <button @click="createJob" class="w-full py-2 bg-primary text-white rounded font-bold">Posting</button>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl shadow overflow-hidden">
+                            <div class="p-4 border-b font-bold">Daftar Member</div>
+                            <div class="max-h-60 overflow-y-auto">
+                                <template x-for="u in adminData.users" :key="u.id">
+                                    <div class="p-3 border-b flex justify-between items-center text-sm">
+                                        <div>
+                                            <p class="font-bold" x-text="u.username"></p>
+                                            <p class="text-xs text-slate-400" x-text="u.email"></p>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button @click="resetPass(u.id)" class="bg-yellow-100 text-yellow-600 px-2 py-1 rounded text-[10px] font-bold">Reset PW</button>
+                                            <button @click="toggleBan(u.id, u.status)" class="px-2 py-1 rounded text-[10px] font-bold text-white" :class="u.status==='active'?'bg-red-500':'bg-green-500'" x-text="u.status==='active'?'BAN':'UNBAN'"></button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                </main>
+
+                <nav class="bg-white border-t flex justify-around items-center py-2 sticky bottom-0 pb-safe z-40" x-show="view !== 'do_job'">
+                    <button @click="view='home'" :class="view==='home'?'text-primary':'text-slate-400'" class="flex flex-col items-center w-16"><i class="fa-solid fa-house text-xl mb-1"></i><span class="text-[10px] font-bold">Home</span></button>
+                    <button @click="view='jobs'" :class="view==='jobs'?'text-primary':'text-slate-400'" class="flex flex-col items-center w-16"><i class="fa-solid fa-play text-xl mb-1"></i><span class="text-[10px] font-bold">Misi</span></button>
+                    <button @click="view='plans'" class="relative -top-8 bg-secondary text-white w-14 h-14 rounded-full shadow-xl flex items-center justify-center border-4 border-slate-50"><i class="fa-solid fa-crown text-xl"></i></button>
+                    <button @click="view='referral'" :class="view==='referral'?'text-primary':'text-slate-400'" class="flex flex-col items-center w-16"><i class="fa-solid fa-users text-xl mb-1"></i><span class="text-[10px] font-bold">Tim</span></button>
+                    <template x-if="user.role==='admin'">
+                        <button @click="view='admin'; loadAdminData()" :class="view==='admin'?'text-primary':'text-slate-400'" class="flex flex-col items-center w-16"><i class="fa-solid fa-gear text-xl mb-1"></i><span class="text-[10px] font-bold">Admin</span></button>
+                    </template>
+                    <template x-if="user.role!=='admin'">
+                         <button @click="logout" class="text-red-400 flex flex-col items-center w-16"><i class="fa-solid fa-power-off text-xl mb-1"></i><span class="text-[10px] font-bold">Out</span></button>
+                    </template>
+                </nav>
+
+            </div>
+        </template>
+    </div>
+
+    <script>
+        function app() {
+            return {
+                authMode: 'login',
+                view: 'home',
+                adminView: 'stats',
+                token: localStorage.getItem('token'),
+                user: JSON.parse(localStorage.getItem('user')),
+                loading: false,
+                toast: { show: false, msg: '', type: 'success' },
+                
+                // Data Stores
+                jobs: [],
+                plansList: [],
+                completedIds: [],
+                plan: null,
+                settings: {},
+                
+                // Job Player
+                activeJob: null,
+                timer: 0,
+                isFocused: true,
+                interval: null,
+
+                // Forms
+                forms: {
+                    auth: { username: '', password: '', email: '', referral_code: '' },
+                    job: { title: '', url: '', min_plan: 1 },
+                    settings: { l1: 10, l2: 5, l3: 2, running_text: '' }
+                },
                 
                 // Admin Data
-                adminStats: {}, 
-                adminUsers: [], 
-                adminPlans: [], 
-                adminJobs: [],
+                adminData: { stats: {}, users: [], transactions: [] },
 
-                // Form States
-                forms: {
-                    login: { username: 'user@demo.com', password: '123' },
-                    register: { username: '', email: '', password: '', referral_code: '' },
-                    transaction: { amount: '', method: 'Transfer Bank', account_info: '' },
-                    plan: { name: '', price: '', duration: '', daily_jobs: '', commission: '', thumbnail: '' },
-                    job: { title: '', url: '', duration: 30, min_level: 1 }
-                },
-
-                // UI States
-                walletAction: null, 
-                showPlanModal: false, 
-                showJobModal: false,
-                toast: { show: false, message: '', type: 'success' },
-                
-                // Job Player States
-                activeJob: null, 
-                jobTimer: 0, 
-                timerInterval: null, 
-                isPageVisible: true,
-
-                initApp() {
-                    const t = localStorage.getItem('adview_token');
-                    const u = localStorage.getItem('adview_user');
-                    if (t && u) {
-                        this.token = t;
-                        this.user = JSON.parse(u);
-                        this.view = this.user.role === 'admin' ? 'admin_dash' : 'home';
-                        if(this.user.role === 'member') this.fetchData();
-                        else this.fetchAdminStats();
+                async init() {
+                    if (this.token) {
+                        await this.fetchUserData();
+                        await this.fetchSettings();
                     }
-                    
+                    // Visibility Listener
                     document.addEventListener("visibilitychange", () => {
-                        this.isPageVisible = !document.hidden;
-                        if (this.view === 'do_job' && this.timerInterval) {
-                            if (!this.isPageVisible) {
-                                clearInterval(this.timerInterval);
-                                this.timerInterval = null;
-                            } else {
-                                if (this.jobTimer > 0) this.startTimer();
-                            }
-                        }
+                        this.isFocused = !document.hidden;
                     });
                 },
 
-                // --- API UTILS ---
-                async api(url, method='GET', body=null) {
+                // --- API HELPER ---
+                async req(url, method = 'GET', body = null) {
                     const headers = { 'Content-Type': 'application/json' };
                     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
                     try {
-                        const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : null });
+                        const res = await fetch(`/api${url}`, { method, headers, body: body ? JSON.stringify(body) : null });
                         const json = await res.json();
-                        if (!res.ok) throw new Error(json.error || 'Gagal memuat data');
+                        if (!res.ok) throw new Error(json.error || 'Terjadi kesalahan');
                         return json;
                     } catch (e) {
                         this.showToast(e.message, 'error');
@@ -102,325 +349,129 @@
                     }
                 },
 
-                // --- AUTH LOGIC ---
-                async login() {
+                // --- AUTH ---
+                async authSubmit() {
                     this.loading = true;
                     try {
-                        const res = await this.api('/api/auth?type=login', 'POST', this.forms.login);
-                        this.token = res.token;
-                        this.user = res.user;
-                        localStorage.setItem('adview_token', res.token);
-                        localStorage.setItem('adview_user', JSON.stringify(res.user));
-                        this.view = res.user.role === 'admin' ? 'admin_dash' : 'home';
-                        if(this.user.role === 'member') this.fetchData(); else this.fetchAdminStats();
-                        this.showToast('Login Berhasil');
-                    } catch(e){} finally { this.loading = false; }
-                },
-                async register() {
-                    this.loading = true;
-                    try {
-                        await this.api('/api/auth?type=register', 'POST', this.forms.register);
-                        this.showToast('Daftar sukses, silakan login');
-                        this.authView = 'login';
-                    } catch(e){} finally { this.loading = false; }
+                        const res = await this.req(`/auth?type=${this.authMode}`, 'POST', this.forms.auth);
+                        if (this.authMode === 'login') {
+                            this.token = res.token;
+                            this.user = res.user;
+                            localStorage.setItem('token', res.token);
+                            localStorage.setItem('user', JSON.stringify(res.user));
+                            await this.fetchUserData();
+                            this.view = 'home';
+                        } else {
+                            this.showToast('Pendaftaran berhasil, silakan login');
+                            this.authMode = 'login';
+                        }
+                    } catch (e) {} finally { this.loading = false; }
                 },
                 logout() { localStorage.clear(); location.reload(); },
 
-                // --- MEMBER DATA FETCHING ---
-                async fetchData() {
-                    if(!this.user || this.user.role !== 'member') return;
+                // --- DATA FETCHING ---
+                async fetchUserData() {
                     try {
-                        const uData = await this.api(`/api/users?id=${this.user.id}`);
-                        this.user = {...this.user, ...uData.user};
-                        this.plan = uData.plan;
-                        const jData = await this.api(`/api/jobs?user_id=${this.user.id}`);
-                        this.jobs = jData.jobs;
-                        this.completedJobIds = jData.completed_ids;
-                        this.userCommission = jData.user_commission || 0;
-                        this.history = await this.api(`/api/transactions?user_id=${this.user.id}`);
-                        this.plansList = await this.api('/api/plans');
-                    } catch(e){}
+                        const res = await this.req(`/users?id=${this.user.id}`);
+                        this.user = { ...this.user, ...res.user };
+                        this.plan = res.plan;
+                        
+                        // Fetch Jobs & Plans
+                        const jRes = await this.req(`/jobs?user_id=${this.user.id}`);
+                        this.jobs = jRes.jobs;
+                        this.completedIds = jRes.completed_ids;
+                        
+                        const pRes = await this.req('/plans');
+                        this.plansList = pRes;
+                    } catch (e) { if(e.message.includes('found')) this.logout(); }
                 },
-
-                // --- ADMIN DATA FETCHING ---
-                async fetchAdminStats() { try { this.adminStats = await this.api('/api/admin?type=stats'); } catch(e){} },
-                async fetchAdminUsers() { try { this.adminUsers = await this.api('/api/admin?type=users'); } catch(e){} },
-                async fetchAdminPlans() { try { this.adminPlans = await this.api('/api/admin?type=plans'); } catch(e){} },
-                async fetchAdminJobs() { 
-                    try { 
-                        const res = await this.api(`/api/admin?type=jobs`);
-                        this.adminJobs = res; 
-                    } catch(e){} 
-                },
-
-                // --- ADMIN ACTIONS ---
-                async createPlan() {
-                    try {
-                        const p = this.forms.plan;
-                        await this.api('/api/admin', 'POST', {
-                            action: 'create_plan',
-                            name: p.name, price: parseFloat(p.price), duration: parseInt(p.duration),
-                            daily_jobs: parseInt(p.daily_jobs), commission: parseFloat(p.commission),
-                            thumbnail: p.thumbnail
-                        });
-                        this.showToast('Plan tersimpan'); this.showPlanModal = false; this.fetchAdminPlans();
-                    } catch(e){}
-                },
-                async createJob() {
-                    try {
-                        const j = this.forms.job;
-                        await this.api('/api/admin', 'POST', {
-                            action: 'create_job',
-                            title: j.title, url: j.url, duration: parseInt(j.duration), min_level: parseInt(j.min_level)
-                        });
-                        this.showToast('Job tersimpan'); this.showJobModal = false; this.fetchAdminJobs();
-                    } catch(e){}
-                },
-                async toggleUserStatus(id, status) {
-                    if(!confirm('Ubah status?')) return;
-                    await this.api('/api/admin', 'POST', { action: 'toggle_user', user_id: id, status: status==='active'?'inactive':'active' });
-                    this.fetchAdminUsers();
+                async fetchSettings() {
+                    try { this.settings = await this.req('/admin?type=settings'); } catch(e){}
                 },
 
                 // --- JOB PLAYER LOGIC ---
-                startJob(job) {
-                    this.activeJob = job;
-                    this.jobTimer = job.duration || 30; // Ambil durasi dari Job
-                    this.view = 'do_job';
-                    this.isPageVisible = true;
-                    this.startTimer();
-                },
-                startTimer() {
-                    if(this.timerInterval) clearInterval(this.timerInterval);
-                    this.timerInterval = setInterval(() => {
-                        if(this.isPageVisible && this.jobTimer > 0) this.jobTimer--;
-                        if(this.jobTimer <= 0) clearInterval(this.timerInterval);
-                    }, 1000);
-                },
-                cancelJob() { clearInterval(this.timerInterval); this.activeJob = null; this.view = 'jobs'; },
-                async claimJob() {
-                    try {
-                        const res = await this.api('/api/jobs', 'POST', { action: 'claim', user_id: this.user.id, job_id: this.activeJob.id });
-                        this.showToast(`Reward +${this.formatRupiah(res.reward)}`);
-                        this.cancelJob(); this.fetchData();
-                    } catch(e){}
-                },
-                
-                // --- TRANSACTION LOGIC ---
-                async buyPlan(p) {
-                    if(!confirm(`Beli ${p.name} seharga ${this.formatRupiah(p.price)}?`)) return;
-                    this.api('/api/plans', 'POST', { user_id: this.user.id, plan_id: p.id }).then(() => { this.showToast('Sukses'); this.fetchData(); });
-                },
-                async handleTransaction() {
-                    const f = this.forms.transaction;
-                    this.api('/api/transactions', 'POST', { 
-                        user_id: this.user.id, type: this.walletAction === 'deposit' ? 'deposit' : 'withdrawal',
-                        amount: f.amount, method: f.method, account_info: f.account_info 
-                    }).then(res => { this.showToast(res.message); this.walletAction = null; this.fetchData(); });
-                },
-
-                // --- UTILS ---
-                getYoutubeId(url) {
+                getVidId(url) {
                     if (!url) return '';
-                    if (url.includes('/shorts/')) return url.split('/shorts/')[1].split('?')[0];
                     const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
                     return (match && match[2].length === 11) ? match[2] : null;
                 },
-                formatRupiah(n) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n); },
-                formatTime(s) { return new Date(s * 1000).toISOString().substring(14, 19); },
-                showToast(msg, type='success') { this.toast = { show: true, message: msg, type }; setTimeout(() => this.toast.show = false, 3000); },
-                changeView(v) { 
-                    this.view = v; 
-                    if(this.user.role === 'admin') {
-                        if(v.includes('dash')) this.fetchAdminStats();
-                        if(v.includes('users')) this.fetchAdminUsers();
-                        if(v.includes('plans')) this.fetchAdminPlans();
-                        if(v.includes('jobs')) this.fetchAdminJobs();
-                    } else { this.fetchData(); }
+                startJob(job) {
+                    this.activeJob = job;
+                    this.timer = job.duration;
+                    this.view = 'do_job';
+                    this.isFocused = true;
+                    
+                    if(this.interval) clearInterval(this.interval);
+                    this.interval = setInterval(() => {
+                        if (this.isFocused && this.timer > 0) this.timer--;
+                        if (this.timer <= 0) clearInterval(this.interval);
+                    }, 1000);
                 },
-                copyRef() { navigator.clipboard.writeText(this.user.referral_code); this.showToast('Tersalin'); },
-                isJobDone(id) { return this.completedJobIds.includes(id); },
+                stopJob() {
+                    clearInterval(this.interval);
+                    this.activeJob = null;
+                    this.view = 'jobs';
+                },
+                async claimJob() {
+                    try {
+                        await this.req('/jobs', 'POST', { action: 'claim', user_id: this.user.id, job_id: this.activeJob.id });
+                        this.showToast('Saldo Berhasil Ditambahkan!');
+                        this.stopJob();
+                        this.fetchUserData();
+                    } catch(e) {}
+                },
+
+                // --- ADMIN ACTIONS ---
+                async loadAdminData() {
+                    const stats = await this.req('/admin?type=stats');
+                    const users = await this.req('/admin?type=users');
+                    const set = await this.req('/admin?type=settings');
+                    this.adminData.stats = stats;
+                    this.adminData.users = users;
+                    this.forms.settings.l1 = set.affiliate_l1;
+                    this.forms.settings.l2 = set.affiliate_l2;
+                    this.forms.settings.l3 = set.affiliate_l3;
+                    this.forms.settings.running_text = set.running_text;
+                },
+                async createJob() {
+                    await this.req('/admin', 'POST', { action: 'create_job', ...this.forms.job });
+                    this.showToast('Job Posted');
+                    this.forms.job.title = '';
+                },
+                async saveSettings() {
+                    await this.req('/admin', 'POST', { action: 'update_settings', ...this.forms.settings });
+                    this.showToast('Pengaturan Disimpan');
+                    this.fetchSettings();
+                },
+                async toggleBan(uid, currentStatus) {
+                    await this.req('/admin', 'POST', { action: 'user_action', user_id: uid, type: currentStatus==='active'?'ban':'unban' });
+                    this.loadAdminData();
+                },
+                async resetPass(uid) {
+                    const p = prompt('Password Baru:');
+                    if(p) {
+                        await this.req('/admin', 'POST', { action: 'user_action', user_id: uid, type: 'reset_pass', new_pass: p });
+                        this.showToast('Password direset');
+                    }
+                },
+
+                // --- UTILS ---
+                async buyPlan(plan, code) {
+                    if(!confirm(`Beli ${plan.name}?`)) return;
+                    try {
+                        await this.req('/plans', 'POST', { user_id: this.user.id, plan_id: plan.id, coupon_code: code });
+                        this.showToast('Upgrade Berhasil!');
+                        this.fetchUserData();
+                    } catch(e){}
+                },
+                copyRef() { navigator.clipboard.writeText(this.user.referral_code); this.showToast('Kode Disalin'); },
+                formatIdr(n) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n || 0); },
+                showToast(msg, type='success') {
+                    this.toast = { show: true, msg, type };
+                    setTimeout(() => this.toast.show = false, 3000);
+                }
             }
         }
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
-    <style>
-        [x-cloak] { display: none !important; }
-        body { background-color: #f1f5f9; }
-        .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; background: white; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow-x: hidden; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-    </style>
-</head>
-<body class="bg-slate-100 text-slate-800 font-sans antialiased" x-data="appData()" x-init="initApp()">
-
-    <!-- Toast Notification -->
-    <div class="fixed top-4 left-0 right-0 flex justify-center z-[99] pointer-events-none">
-        <div x-show="toast.show" x-transition class="bg-slate-800 text-white px-5 py-2 rounded-full shadow-lg pointer-events-auto flex items-center gap-2">
-            <i class="fa-solid" :class="toast.type==='error'?'fa-times-circle text-red-400':'fa-check-circle text-green-400'"></i>
-            <span x-text="toast.message" class="text-sm font-bold"></span>
-        </div>
-    </div>
-
-    <div class="app-container">
-        
-        <!-- AUTH VIEW -->
-        <template x-if="!token">
-            <div class="flex-1 flex flex-col justify-center p-6 bg-white animate-fade-in">
-                <div class="text-center mb-8"><h1 class="text-3xl font-bold text-primary">AdView Pro</h1></div>
-                <div class="bg-slate-50 p-1 rounded-lg flex mb-6">
-                    <button @click="authView='login'" class="flex-1 py-2 text-sm font-bold rounded transition" :class="authView==='login'?'bg-white shadow text-primary':'text-slate-400'">Masuk</button>
-                    <button @click="authView='register'" class="flex-1 py-2 text-sm font-bold rounded transition" :class="authView==='register'?'bg-white shadow text-primary':'text-slate-400'">Daftar</button>
-                </div>
-                <form x-show="authView==='login'" @submit.prevent="login" class="space-y-4">
-                    <input x-model="forms.login.username" class="w-full p-3 border rounded-xl" placeholder="Username" required>
-                    <input type="password" x-model="forms.login.password" class="w-full p-3 border rounded-xl" placeholder="Password" required>
-                    <button type="submit" class="w-full py-3 bg-primary text-white font-bold rounded-xl" :disabled="loading">MASUK</button>
-                </form>
-                <form x-show="authView==='register'" @submit.prevent="register" class="space-y-4">
-                    <input x-model="forms.register.username" class="w-full p-3 border rounded-xl" placeholder="Username" required>
-                    <input type="email" x-model="forms.register.email" class="w-full p-3 border rounded-xl" placeholder="Email" required>
-                    <input type="password" x-model="forms.register.password" class="w-full p-3 border rounded-xl" placeholder="Password" required>
-                    <input x-model="forms.register.referral_code" class="w-full p-3 border rounded-xl" placeholder="Kode Referral">
-                    <button type="submit" class="w-full py-3 bg-secondary text-white font-bold rounded-xl" :disabled="loading">DAFTAR</button>
-                </form>
-            </div>
-        </template>
-
-        <!-- MAIN APP VIEW -->
-        <template x-if="token && user">
-            <div class="flex flex-col h-screen">
-                <!-- Header -->
-                <header class="bg-white p-4 shadow-sm z-10 flex justify-between items-center sticky top-0" x-show="view !== 'do_job'">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-primary font-bold" x-text="user.username.substring(0,2).toUpperCase()"></div>
-                        <div><p class="text-xs text-slate-400 font-bold">SALDO</p><p class="font-bold" x-text="formatRupiah(user.balance)"></p></div>
-                    </div>
-                    <span class="text-xs font-bold bg-slate-100 px-2 py-1 rounded text-primary" x-text="plan ? plan.name : 'Free'"></span>
-                </header>
-
-                <!-- Content Main Area -->
-                <main class="flex-1 overflow-y-auto p-4 pb-24 relative bg-slate-50">
-                    
-                    <!-- HOME VIEW -->
-                    <div x-show="view==='home'" class="space-y-4 animate-fade-in">
-                        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-                            <p class="text-xs opacity-80">Pendapatan Hari Ini</p>
-                            <h2 class="text-3xl font-bold mb-4" x-text="formatRupiah(user.today_income || 0)"></h2>
-                            <div class="flex gap-3">
-                                <button @click="view='jobs'" class="bg-white text-primary px-4 py-2 rounded-lg text-xs font-bold shadow">Misi</button>
-                                <button @click="view='plans'" class="bg-white/20 backdrop-blur px-4 py-2 rounded-lg text-xs font-bold">Upgrade</button>
-                            </div>
-                        </div>
-                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100"><p class="text-xs text-slate-400 font-bold">Tugas Selesai</p><p class="font-bold text-lg"><span x-text="user.tasks_done"></span> / <span x-text="plan?.daily_jobs_limit || 0"></span></p></div>
-                    </div>
-
-                    <!-- JOBS VIEW -->
-                    <div x-show="view==='jobs'" class="space-y-4 animate-fade-in">
-                        <div class="flex justify-between items-end"><h2 class="font-bold text-lg">Daftar Misi</h2><span class="text-xs bg-indigo-50 text-primary px-2 py-1 rounded font-bold">Upah: <span x-text="formatRupiah(userCommission)"></span></span></div>
-                        <div x-show="user.tasks_done >= (plan ? plan.daily_jobs_limit : 0)" class="bg-red-50 text-red-600 p-3 rounded-xl text-center text-sm font-bold border border-red-100">Limit Harian Tercapai!</div>
-                        <template x-for="job in jobs" :key="job.id">
-                            <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex gap-3 items-center">
-                                <div class="w-24 h-16 bg-slate-200 rounded-lg overflow-hidden flex-shrink-0 relative">
-                                    <img :src="'https://img.youtube.com/vi/'+getYoutubeId(job.youtube_url)+'/mqdefault.jpg'" class="w-full h-full object-cover">
-                                </div>
-                                <div class="flex-1 min-w-0"><h4 class="font-bold text-sm truncate" x-text="job.title"></h4><p class="text-xs text-slate-400">Durasi: <span x-text="job.duration"></span>s</p></div>
-                                <div class="flex-shrink-0">
-                                    <template x-if="isJobDone(job.id)"><i class="fa-solid fa-check-circle text-green-500 text-xl"></i></template>
-                                    <template x-if="!isJobDone(job.id)"><button @click="startJob(job)" :disabled="user.tasks_done >= (plan ? plan.daily_jobs_limit : 0)" class="bg-primary text-white text-xs font-bold px-3 py-2 rounded-lg disabled:opacity-50">PLAY</button></template>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- DO JOB VIEW -->
-                    <div x-show="view==='do_job'" class="fixed inset-0 bg-black z-50 flex flex-col">
-                        <div class="p-4 flex justify-between items-center text-white bg-gradient-to-b from-black/80 to-transparent">
-                            <button @click="cancelJob" class="text-sm font-bold">Kembali</button>
-                            <div class="bg-red-600 px-3 py-1 rounded-full text-xs font-bold animate-pulse">REC <span x-text="formatTime(jobTimer)"></span></div>
-                        </div>
-                        <div x-show="!isPageVisible" class="absolute inset-0 bg-black/90 z-50 flex flex-col items-center justify-center text-white text-center"><p>JANGAN PINDAH TAB!</p></div>
-                        <div class="flex-1 flex items-center justify-center relative">
-                            <div class="w-full aspect-video bg-slate-900 relative">
-                                <img :src="'https://img.youtube.com/vi/'+getYoutubeId(activeJob?.youtube_url)+'/hqdefault.jpg'" class="w-full h-full object-cover opacity-60">
-                                <div class="absolute inset-0 flex items-center justify-center text-white flex-col"><i class="fa-solid fa-play text-3xl"></i></div>
-                            </div>
-                        </div>
-                        <div class="bg-slate-900 p-6 rounded-t-3xl text-white">
-                            <h3 class="font-bold text-lg truncate" x-text="activeJob?.title"></h3>
-                            <div class="w-full bg-slate-800 h-2 rounded-full mt-4 mb-6 overflow-hidden"><div class="bg-primary h-full transition-all duration-1000" :style="`width: ${((activeJob?.duration - jobTimer)/activeJob?.duration)*100}%`"></div></div>
-                            <button x-show="jobTimer <= 0" @click="claimJob" class="w-full py-4 bg-green-500 font-bold rounded-xl shadow-lg">KLAIM</button>
-                            <button x-show="jobTimer > 0" class="w-full py-4 bg-slate-700 text-slate-500 font-bold rounded-xl cursor-not-allowed">Tunggu...</button>
-                        </div>
-                    </div>
-
-                    <!-- PLANS VIEW -->
-                    <div x-show="view==='plans'" class="space-y-4">
-                        <template x-for="p in plansList" :key="p.id">
-                            <div class="bg-white rounded-xl overflow-hidden shadow-sm border relative">
-                                <div x-show="plan && plan.name===p.name" class="absolute top-2 right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded">AKTIF</div>
-                                <img :src="p.thumbnail_url" class="w-full h-32 object-cover" onerror="this.src='https://placehold.co/600x300?text=Plan'">
-                                <div class="p-4">
-                                    <div class="flex justify-between items-center mb-2"><h3 class="font-bold" x-text="p.name"></h3><p class="text-primary font-bold" x-text="formatRupiah(p.price)"></p></div>
-                                    <div class="grid grid-cols-2 gap-2 text-xs text-slate-500 mb-3">
-                                        <div class="bg-slate-50 p-2 rounded text-center"><span class="font-bold block text-slate-800" x-text="p.daily_jobs_limit"></span> Jobs/Hari</div>
-                                        <div class="bg-slate-50 p-2 rounded text-center"><span class="font-bold block text-green-600" x-text="formatRupiah(p.commission)"></span> /Video</div>
-                                    </div>
-                                    <button @click="buyPlan(p)" :disabled="plan && plan.name===p.name" class="w-full py-2 rounded font-bold text-xs" :class="plan && plan.name===p.name ? 'bg-slate-100 text-slate-400' : 'bg-secondary text-white'">Beli Sekarang</button>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- WALLET VIEW -->
-                    <div x-show="view==='wallet'" class="space-y-6">
-                        <div class="bg-white p-6 rounded-2xl shadow-sm text-center border border-slate-100">
-                            <p class="text-slate-400 text-xs font-bold uppercase">Total Saldo</p>
-                            <h2 class="text-4xl font-bold text-slate-800 mt-1 mb-6" x-text="formatRupiah(user.balance)"></h2>
-                            <div class="grid grid-cols-2 gap-4">
-                                <button @click="walletAction='deposit'" class="py-3 bg-green-50 text-green-700 rounded-xl font-bold text-sm border border-green-100">Deposit</button>
-                                <button @click="walletAction='withdrawal'" class="py-3 bg-red-50 text-red-700 rounded-xl font-bold text-sm border border-red-100">Tarik</button>
-                            </div>
-                        </div>
-                        <div x-show="walletAction" class="bg-white p-5 rounded-xl shadow-lg border border-indigo-50 relative">
-                            <button @click="walletAction=null" class="absolute top-3 right-3 text-slate-400">X</button>
-                            <h3 class="font-bold mb-3" x-text="walletAction==='deposit'?'Deposit':'Penarikan'"></h3>
-                            <form @submit.prevent="handleTransaction" class="space-y-3">
-                                <input type="number" x-model="forms.transaction.amount" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Nominal">
-                                <div x-show="walletAction==='deposit'"><select x-model="forms.transaction.method" class="w-full p-3 border rounded-xl bg-slate-50"><option>Transfer Bank</option><option>E-Wallet</option></select></div>
-                                <div x-show="walletAction==='withdrawal'"><textarea x-model="forms.transaction.account_info" class="w-full p-3 border rounded-xl bg-slate-50" placeholder="Info Rekening"></textarea></div>
-                                <button type="submit" class="w-full py-3 bg-primary text-white rounded-xl font-bold">KONFIRMASI</button>
-                            </form>
-                        </div>
-                    </div>
-
-                    <!-- ADMIN DASHBOARD (Sederhana) -->
-                    <div x-show="view==='admin_dash'" class="space-y-4">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-primary"><p class="text-xs font-bold uppercase text-slate-500">Users</p><p class="text-2xl font-bold" x-text="adminStats.total_users"></p></div>
-                        </div>
-                    </div>
-                </main>
-
-                <!-- Sticky Nav -->
-                <nav class="bg-white border-t border-slate-200 flex justify-around items-center py-2 pb-safe z-40 shadow" x-show="view !== 'do_job'">
-                    <template x-if="user.role === 'member'">
-                       <div class="contents">
-                           <button @click="changeView('home')" :class="view==='home'?'text-primary':'text-slate-400'" class="flex flex-col items-center gap-1 w-16"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">Home</span></button>
-                           <button @click="changeView('jobs')" :class="['jobs'].includes(view)?'text-primary':'text-slate-400'" class="flex flex-col items-center gap-1 w-16"><i class="fa-solid fa-play-circle text-xl"></i><span class="text-[10px] font-bold">Misi</span></button>
-                           <button @click="changeView('plans')" class="relative -top-6 bg-primary text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-slate-100"><i class="fa-solid fa-crown text-xl"></i></button>
-                           <button @click="changeView('wallet')" :class="view==='wallet'?'text-primary':'text-slate-400'" class="flex flex-col items-center gap-1 w-16"><i class="fa-solid fa-wallet text-xl"></i><span class="text-[10px] font-bold">Dompet</span></button>
-                           <button @click="changeView('account')" :class="view==='account'?'text-primary':'text-slate-400'" class="flex flex-col items-center gap-1 w-16"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">Akun</span></button>
-                       </div>
-                    </template>
-                    <template x-if="user.role === 'admin'">
-                        <div class="contents">
-                           <button @click="changeView('admin_dash')" :class="view==='admin_dash'?'text-primary':'text-slate-400'" class="flex flex-col items-center gap-1 w-16"><i class="fa-solid fa-chart-pie text-xl"></i><span class="text-[10px]">Dash</span></button>
-                        </div>
-                    </template>
-                </nav>
-            </div>
-        </template>
-    </div>
 </body>
 </html>
