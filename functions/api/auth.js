@@ -18,7 +18,6 @@ export async function onRequestPost(context) {
       WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
     `).bind(user.id).first();
 
-    // Hitung balance
     const balance = await getUserBalance(env, user.id);
 
     return jsonResponse({ 
