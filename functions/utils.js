@@ -18,6 +18,10 @@ export const getYoutubeId = (url) => {
 };
 
 export const getUserBalance = async (env, userId) => {
+  // Menghitung saldo dari transaksi. 
+  // Expense (-)
+  // Withdrawal Pending/Success (-)
+  // Income/Deposit/Commission (+)
   const query = `
     SELECT SUM(
       CASE 
