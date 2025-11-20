@@ -11,9 +11,6 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Alpine.js (Wajib defer) -->
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
-
     <!-- Config Tailwind -->
     <script>
         tailwind.config = {
@@ -26,6 +23,227 @@
             }
         }
     </script>
+
+    <!-- LOGIKA APLIKASI (Ditaruh di Head agar terload sebelum Alpine) -->
+    <script>
+        function app() {
+            return {
+                authMode: 'login',
+                view: 'home',
+                adminView: 'stats',
+                token: localStorage.getItem('token'),
+                user: JSON.parse(localStorage.getItem('user')),
+                loading: false,
+                toast: { show: false, msg: '', type: 'success' },
+                
+                // Data Stores
+                jobs: [],
+                plansList: [],
+                completedIds: [],
+                history: [],
+                plan: null,
+                settings: {},
+                
+                // Job Player
+                activeJob: null,
+                timer: 0,
+                isFocused: true,
+                interval: null,
+
+                // Forms
+                forms: {
+                    auth: { username: '', password: '', email: '', referral_code: '' },
+                    job: { title: '', url: '', min_plan: 1 },
+                    settings: { l1: 10, l2: 5, l3: 2, running_text: '' },
+                    transaction: { amount: '', method: 'Transfer Bank', account_info: '' },
+                    plan: { name: '', price: '', duration: 30, daily_jobs: 10, commission: 500, return_capital: false, thumbnail: '' }
+                },
+                
+                // Admin Data
+                adminData: { stats: {}, users: [], transactions: [] },
+
+                async init() {
+                    if (this.token) {
+                        await this.fetchUserData();
+                        await this.fetchHistory();
+                        await this.fetchSettings();
+                    }
+                    document.addEventListener("visibilitychange", () => {
+                        this.isFocused = !document.hidden;
+                    });
+                },
+
+                // --- API HELPER ---
+                async req(url, method = 'GET', body = null) {
+                    const headers = { 'Content-Type': 'application/json' };
+                    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+                    try {
+                        const res = await fetch(`/api${url}`, { method, headers, body: body ? JSON.stringify(body) : null });
+                        const json = await res.json();
+                        if (!res.ok) throw new Error(json.error || 'Terjadi kesalahan');
+                        return json;
+                    } catch (e) {
+                        this.showToast(e.message, 'error');
+                        throw e;
+                    }
+                },
+
+                // --- AUTH ---
+                async authSubmit() {
+                    this.loading = true;
+                    try {
+                        const res = await this.req(`/auth?type=${this.authMode}`, 'POST', this.forms.auth);
+                        if (this.authMode === 'login') {
+                            this.token = res.token;
+                            this.user = res.user;
+                            localStorage.setItem('token', res.token);
+                            localStorage.setItem('user', JSON.stringify(res.user));
+                            await this.fetchUserData();
+                            this.view = 'home';
+                        } else {
+                            this.showToast('Pendaftaran berhasil, silakan login');
+                            this.authMode = 'login';
+                        }
+                    } catch (e) {} finally { this.loading = false; }
+                },
+                logout() { localStorage.clear(); location.reload(); },
+
+                // --- DATA FETCHING ---
+                async fetchUserData() {
+                    try {
+                        const res = await this.req(`/users?id=${this.user.id}`);
+                        this.user = { ...this.user, ...res.user };
+                        this.plan = res.plan;
+                        
+                        const jRes = await this.req(`/jobs?user_id=${this.user.id}`);
+                        this.jobs = jRes.jobs;
+                        this.completedIds = jRes.completed_ids;
+                        
+                        const pRes = await this.req('/plans');
+                        this.plansList = pRes;
+                    } catch (e) { if(e.message.includes('found')) this.logout(); }
+                },
+                async fetchHistory() {
+                    try { this.history = await this.req(`/transactions?user_id=${this.user.id}`); } catch(e){}
+                },
+                async fetchSettings() {
+                    try { this.settings = await this.req('/admin?type=settings'); } catch(e){}
+                },
+
+                // --- TRANSACTION LOGIC (DEPOSIT/WITHDRAW) ---
+                async handleTransaction(type) {
+                    const f = this.forms.transaction;
+                    if(!f.amount || f.amount <= 0) return this.showToast('Masukkan nominal yang valid', 'error');
+                    
+                    try {
+                        await this.req('/transactions', 'POST', {
+                            user_id: this.user.id,
+                            type: type,
+                            amount: parseFloat(f.amount),
+                            method: f.method,
+                            account_info: f.account_info
+                        });
+                        this.showToast(`${type === 'deposit' ? 'Deposit' : 'Penarikan'} Berhasil Diajukan`);
+                        this.fetchUserData();
+                        this.fetchHistory();
+                        this.forms.transaction.amount = '';
+                        this.forms.transaction.account_info = '';
+                    } catch(e){}
+                },
+
+                // --- JOB PLAYER LOGIC ---
+                getVidId(url) {
+                    if (!url) return '';
+                    const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+                    return (match && match[2].length === 11) ? match[2] : null;
+                },
+                startJob(job) {
+                    this.activeJob = job;
+                    this.timer = job.duration;
+                    this.view = 'do_job';
+                    this.isFocused = true;
+                    
+                    if(this.interval) clearInterval(this.interval);
+                    this.interval = setInterval(() => {
+                        if (this.isFocused && this.timer > 0) this.timer--;
+                        if (this.timer <= 0) clearInterval(this.interval);
+                    }, 1000);
+                },
+                stopJob() {
+                    clearInterval(this.interval);
+                    this.activeJob = null;
+                    this.view = 'jobs';
+                },
+                async claimJob() {
+                    try {
+                        await this.req('/jobs', 'POST', { action: 'claim', user_id: this.user.id, job_id: this.activeJob.id });
+                        this.showToast('Saldo Berhasil Ditambahkan!');
+                        this.stopJob();
+                        this.fetchUserData();
+                    } catch(e) {}
+                },
+
+                // --- ADMIN ACTIONS ---
+                async loadAdminData() {
+                    const stats = await this.req('/admin?type=stats');
+                    const users = await this.req('/admin?type=users');
+                    const set = await this.req('/admin?type=settings');
+                    this.adminData.stats = stats;
+                    this.adminData.users = users;
+                    this.forms.settings.l1 = set.affiliate_l1;
+                    this.forms.settings.l2 = set.affiliate_l2;
+                    this.forms.settings.l3 = set.affiliate_l3;
+                    this.forms.settings.running_text = set.running_text;
+                },
+                async createJob() {
+                    await this.req('/admin', 'POST', { action: 'create_job', ...this.forms.job });
+                    this.showToast('Job Posted');
+                    this.forms.job.title = '';
+                },
+                async createPlan() {
+                    await this.req('/admin', 'POST', { action: 'create_plan', ...this.forms.plan });
+                    this.showToast('Paket Dibuat');
+                    this.adminView = 'stats';
+                },
+                async saveSettings() {
+                    await this.req('/admin', 'POST', { action: 'update_settings', ...this.forms.settings });
+                    this.showToast('Pengaturan Disimpan');
+                    this.fetchSettings();
+                },
+                async toggleBan(uid, currentStatus) {
+                    await this.req('/admin', 'POST', { action: 'user_action', user_id: uid, type: currentStatus==='active'?'ban':'unban' });
+                    this.loadAdminData();
+                },
+                async resetPass(uid) {
+                    const p = prompt('Password Baru:');
+                    if(p) {
+                        await this.req('/admin', 'POST', { action: 'user_action', user_id: uid, type: 'reset_pass', new_pass: p });
+                        this.showToast('Password direset');
+                    }
+                },
+
+                // --- UTILS ---
+                async buyPlan(plan, code) {
+                    if(!confirm(`Beli ${plan.name}?`)) return;
+                    try {
+                        await this.req('/plans', 'POST', { user_id: this.user.id, plan_id: plan.id, coupon_code: code });
+                        this.showToast('Upgrade Berhasil!');
+                        this.fetchUserData();
+                    } catch(e){}
+                },
+                copyRef() { navigator.clipboard.writeText(this.user.referral_code); this.showToast('Kode Disalin'); },
+                formatIdr(n) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n || 0); },
+                showToast(msg, type='success') {
+                    this.toast = { show: true, msg, type };
+                    setTimeout(() => this.toast.show = false, 3000);
+                }
+            }
+        }
+    </script>
+
+    <!-- Alpine.js (Wajib defer & diletakkan SETELAH script logika di atas) -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+
     <style>
         [x-cloak] { display: none !important; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
