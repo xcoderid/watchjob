@@ -6,4 +6,4 @@ pages_build_output_dir = "."
 [[d1_databases]]
 binding = "DB"
 database_name = "watchjob"
-database_id = "3d3eccf8-53ff-4bb4-af6d-450897926736"
+database_id = "4764b48a-a368-45bb-ac01-258b31e6ed1d"
