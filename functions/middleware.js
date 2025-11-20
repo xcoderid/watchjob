@@ -2,6 +2,8 @@ import { jsonResponse } from './utils';
 
 export async function onRequest(context) {
   const { request, next } = context;
+  
+  // Handle Preflight Requests (CORS)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -11,11 +13,14 @@ export async function onRequest(context) {
       },
     });
   }
+
   try {
     const response = await next();
+    // Ensure CORS headers are present on all responses
     response.headers.set('Access-Control-Allow-Origin', '*');
     return response;
   } catch (err) {
-    return jsonResponse({ error: err.message }, 500);
+    // Global Error Handler
+    return jsonResponse({ error: 'Internal Server Error: ' + err.message }, 500);
   }
 }
