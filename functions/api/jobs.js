@@ -1,102 +1,95 @@
 export async function onRequestGet(context) {
-  // --- GET JOBS ---
   const { request, env } = context;
   const url = new URL(request.url);
   const userId = url.searchParams.get('user_id');
-  // Jika user belum login/tidak punya plan, anggap level 1 (Trial)
-  let planLevel = 1; 
 
-  if (userId) {
-     // Cek Plan Level user saat ini untuk filter jobs
-     const sub = await env.DB.prepare(`
-        SELECT p.id as plan_level 
-        FROM user_subscriptions s
-        JOIN plans p ON s.plan_id = p.id
-        WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
-     `).bind(userId).first();
-     if (sub) planLevel = sub.plan_level;
+  if (!userId) return new Response(JSON.stringify({ error: 'User ID required' }), { status: 400 });
+
+  // 1. Tentukan Komisi dan Limit berdasarkan Plan User
+  const sub = await env.DB.prepare(`
+    SELECT p.id, p.commission, p.daily_jobs_limit
+    FROM user_subscriptions s
+    JOIN plans p ON s.plan_id = p.id
+    WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
+  `).bind(userId).first();
+
+  // Fallback ke Trial (Plan ID 1) jika tidak ada plan aktif
+  let planInfo = sub;
+  if (!planInfo) {
+      planInfo = await env.DB.prepare('SELECT id, commission, daily_jobs_limit FROM plans WHERE id = 1').first();
   }
 
-  // 1. Ambil Jobs (Table: jobs)
+  // 2. Ambil Jobs (mengandung durasi dan level minimum)
   const jobs = await env.DB.prepare(`
     SELECT * FROM jobs WHERE min_plan_level <= ? ORDER BY created_at DESC
-  `).bind(planLevel).all();
+  `).bind(planInfo ? planInfo.id : 1).all();
 
-  // 2. Cek task yang SUDAH selesai hari ini (Table: task_completions)
+  // 3. Cek Job yang sudah selesai hari ini
   const todayStart = new Date().toISOString().split('T')[0] + ' 00:00:00';
-  
   const completed = await env.DB.prepare(`
     SELECT job_id FROM task_completions 
     WHERE user_id = ? AND completed_at >= ?
   `).bind(userId, todayStart).all();
-
+  
   const completedIds = completed.results.map(row => row.job_id);
 
   return new Response(JSON.stringify({
     success: true,
+    user_commission: planInfo ? planInfo.commission : 0, // Komisi per tontonan
+    daily_limit: planInfo ? planInfo.daily_jobs_limit : 0,
     jobs: jobs.results,
     completed_ids: completedIds
   }));
 }
 
 export async function onRequestPost(context) {
-  // --- CLAIM REWARD ---
   const { request, env } = context;
   const body = await request.json();
   const { action, user_id, job_id } = body; 
 
-  if (action === 'start') {
-    return new Response(JSON.stringify({ status: 'started', time: Date.now() }));
-  }
-
   if (action === 'claim') {
-    // 1. Cek Limit Harian User dari Plan
-    const subscription = await env.DB.prepare(`
-      SELECT p.daily_jobs_limit 
+    // 1. Tentukan Komisi dari Plan User
+    const sub = await env.DB.prepare(`
+      SELECT p.commission, p.daily_jobs_limit 
       FROM user_subscriptions s
       JOIN plans p ON s.plan_id = p.id
       WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
     `).bind(user_id).first();
 
-    // Default limit kecil jika tidak ada subskripsi
-    const limit = subscription ? subscription.daily_jobs_limit : 0;
+    let commission = 0;
+    let limit = 0;
+    
+    if (sub) { commission = sub.commission; limit = sub.daily_jobs_limit; } 
+    else { const freePlan = await env.DB.prepare('SELECT commission, daily_jobs_limit FROM plans WHERE id = 1').first(); if(freePlan) { commission = freePlan.commission; limit = freePlan.daily_jobs_limit; } }
 
-    // 2. Hitung jumlah task hari ini
+    // 2. Cek Batas Harian
     const todayStart = new Date().toISOString().split('T')[0] + ' 00:00:00';
-    const doneCount = await env.DB.prepare(`
-      SELECT COUNT(*) as count FROM task_completions 
-      WHERE user_id = ? AND completed_at >= ?
-    `).bind(user_id, todayStart).first();
+    const doneCount = await env.DB.prepare(`SELECT COUNT(*) as count FROM task_completions WHERE user_id = ? AND completed_at >= ?`).bind(user_id, todayStart).first();
 
-    if (doneCount.count >= limit) {
-      return new Response(JSON.stringify({ error: 'Batas harian tercapai! Upgrade plan Anda.' }), { status: 403 });
-    }
+    if (doneCount.count >= limit) return new Response(JSON.stringify({ error: 'Batas harian tercapai.' }), { status: 403 });
 
-    // 3. Ambil data Job (terutama Reward Amount)
-    const job = await env.DB.prepare('SELECT * FROM jobs WHERE id = ?').bind(job_id).first();
-    if (!job) return new Response(JSON.stringify({ error: 'Job tidak ditemukan' }), { status: 404 });
+    // 3. Validasi Job & Duplikasi
+    const job = await env.DB.prepare('SELECT title FROM jobs WHERE id = ?').bind(job_id).first();
+    if (!job) return new Response(JSON.stringify({ error: 'Job tidak valid' }), { status: 404 });
+    
+    const checkDone = await env.DB.prepare('SELECT id FROM task_completions WHERE user_id = ? AND job_id = ? AND completed_at >= ?').bind(user_id, job_id, todayStart).first();
+    if (checkDone) return new Response(JSON.stringify({ error: 'Sudah diklaim hari ini' }), { status: 400 });
 
-    // 4. Eksekusi Transaksi
+    // 4. Eksekusi Update Saldo & Log (Atomic Batch)
     try {
       await env.DB.batch([
-        // a. Catat penyelesaian (Table: task_completions)
-        env.DB.prepare(`
-            INSERT INTO task_completions (user_id, job_id, amount_earned) 
-            VALUES (?, ?, ?)
-        `).bind(user_id, job_id, job.reward_amount),
-
-        // b. Catat transaksi (Table: transactions)
-        env.DB.prepare(`
-            INSERT INTO transactions (user_id, type, amount, description, status) 
-            VALUES (?, 'income', ?, ?, 'success')
-        `).bind(user_id, job.reward_amount, `Reward Job: ${job.title}`)
+        // Log Penyelesaian Task
+        env.DB.prepare(`INSERT INTO task_completions (user_id, job_id, amount_earned) VALUES (?, ?, ?)`).bind(user_id, job_id, commission),
+        // Log Transaksi (Ledger)
+        env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'income', ?, ?, 'success')`).bind(user_id, commission, `Tonton: ${job.title}`),
+        // Update Saldo User (Hemat CPU)
+        env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE id = ?`).bind(commission, user_id)
       ]);
 
-      return new Response(JSON.stringify({ success: true, reward: job.reward_amount }));
+      return new Response(JSON.stringify({ success: true, reward: commission }));
     } catch (e) {
-      return new Response(JSON.stringify({ error: 'Database Error: ' + e.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: e.message }), { status: 500 });
     }
   }
-
   return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400 });
 }
