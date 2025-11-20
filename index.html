@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AdView Pro - Watch to Earn</title>
     
+    <!-- Tailwind (Development Mode) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <!-- Alpine.js (Wajib defer) -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
 
+    <!-- Config Tailwind -->
     <script>
         tailwind.config = {
             theme: {
@@ -30,6 +34,7 @@
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans antialiased" x-data="app()" x-init="init()">
 
+    <!-- TOAST -->
     <div class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[100]" x-cloak x-show="toast.show" x-transition.opacity.duration.500ms>
         <div :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'" class="text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 font-bold text-sm">
             <i :class="toast.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'" class="fa-solid"></i>
@@ -39,6 +44,7 @@
 
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-2xl relative flex flex-col overflow-hidden">
         
+        <!-- AUTH PAGES -->
         <template x-if="!token">
             <div class="flex-1 flex flex-col justify-center p-8">
                 <div class="text-center mb-10">
@@ -64,9 +70,11 @@
             </div>
         </template>
 
+        <!-- APP INTERFACE -->
         <template x-if="token && user">
             <div class="flex flex-col h-screen">
                 
+                <!-- HEADER -->
                 <header class="bg-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-sm" x-show="view !== 'do_job'">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-primary font-bold text-lg" x-text="user.username[0].toUpperCase()"></div>
@@ -80,13 +88,17 @@
                     </div>
                 </header>
 
+                <!-- RUNNING TEXT -->
                 <div x-show="view==='home'" class="bg-secondary text-white text-xs py-2 overflow-hidden whitespace-nowrap relative z-20">
                     <div class="inline-block animate-marquee" x-text="settings.running_text || 'Selamat Datang di AdView Pro'"></div>
                 </div>
 
+                <!-- MAIN CONTENT -->
                 <main class="flex-1 overflow-y-auto bg-slate-50 pb-24 relative">
                     
+                    <!-- MEMBER: HOME DASHBOARD -->
                     <div x-show="view==='home'" class="p-4 space-y-5 animate-fade-in">
+                        <!-- Slider/Banner -->
                         <div class="w-full h-40 bg-gradient-to-r from-primary to-purple-600 rounded-2xl shadow-lg flex items-center justify-center text-white p-6 relative overflow-hidden">
                             <div class="absolute top-0 right-0 opacity-10 transform translate-x-4 -translate-y-4"><i class="fa-solid fa-wallet text-9xl"></i></div>
                             <div class="z-10 w-full">
@@ -96,14 +108,84 @@
                             </div>
                         </div>
 
+                        <!-- Quick Menu -->
                         <div class="grid grid-cols-4 gap-2">
                             <button @click="view='jobs'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-play-circle text-2xl text-red-500 mb-2"></i><span class="text-[10px] font-bold">Misi</span></button>
                             <button @click="view='deposit'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-money-bill-transfer text-2xl text-green-500 mb-2"></i><span class="text-[10px] font-bold">Deposit</span></button>
                             <button @click="view='referral'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-users text-2xl text-blue-500 mb-2"></i><span class="text-[10px] font-bold">Tim</span></button>
                             <button @click="view='withdraw'" class="bg-white p-3 rounded-xl flex flex-col items-center shadow-sm border border-slate-100"><i class="fa-solid fa-building-columns text-2xl text-slate-500 mb-2"></i><span class="text-[10px] font-bold">Tarik</span></button>
                         </div>
+                        
+                        <!-- Recent Transactions Snippet -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+                            <h3 class="font-bold text-sm mb-3">Riwayat Terakhir</h3>
+                            <div class="space-y-3">
+                                <template x-for="t in history.slice(0, 3)" :key="t.id">
+                                    <div class="flex justify-between items-center text-xs border-b pb-2 last:border-0">
+                                        <div>
+                                            <p class="font-bold" x-text="t.type.toUpperCase()"></p>
+                                            <p class="text-slate-400" x-text="new Date(t.created_at).toLocaleDateString()"></p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="font-bold" :class="t.type==='income' || t.type==='deposit' ? 'text-green-600' : 'text-red-600'" x-text="(t.type==='income'||t.type==='deposit' ? '+' : '-') + formatIdr(t.amount)"></p>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px]" :class="t.status==='success'?'bg-green-100 text-green-700':(t.status==='pending'?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-700')" x-text="t.status"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="!history.length" class="text-center text-slate-400 text-xs">Belum ada transaksi</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- VIEW: DEPOSIT -->
+                    <div x-show="view==='deposit'" class="p-4 space-y-4">
+                        <h2 class="font-bold text-xl flex items-center gap-2"><i class="fa-solid fa-money-bill-wave text-green-500"></i> Deposit Saldo</h2>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                            <form @submit.prevent="handleTransaction('deposit')" class="space-y-4">
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 block mb-1">Metode Pembayaran</label>
+                                    <select x-model="forms.transaction.method" class="w-full p-3 bg-slate-50 border rounded-xl text-sm">
+                                        <option value="Transfer Bank">Transfer Bank (BCA/Mandiri/BRI)</option>
+                                        <option value="E-Wallet">E-Wallet (DANA/OVO/Gopay)</option>
+                                        <option value="QRIS">QRIS</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 block mb-1">Nominal Deposit</label>
+                                    <input x-model="forms.transaction.amount" type="number" class="w-full p-3 bg-slate-50 border rounded-xl text-sm" placeholder="Min. 10.000">
+                                </div>
+                                <button type="submit" class="w-full py-3 bg-green-500 text-white font-bold rounded-xl shadow hover:bg-green-600">Buat Deposit</button>
+                            </form>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-xl text-blue-800 text-xs">
+                            <p class="font-bold mb-1">Info:</p>
+                            <p>Untuk versi demo ini, deposit akan langsung berstatus <strong>SUCCESS</strong> dan saldo langsung masuk.</p>
+                        </div>
                     </div>
 
+                    <!-- VIEW: WITHDRAW -->
+                    <div x-show="view==='withdraw'" class="p-4 space-y-4">
+                        <h2 class="font-bold text-xl flex items-center gap-2"><i class="fa-solid fa-building-columns text-slate-500"></i> Tarik Dana</h2>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                            <div class="mb-4 text-center">
+                                <p class="text-xs text-slate-400">Saldo Tersedia</p>
+                                <h3 class="text-2xl font-bold text-primary" x-text="formatIdr(user.balance)"></h3>
+                            </div>
+                            <form @submit.prevent="handleTransaction('withdrawal')" class="space-y-4">
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 block mb-1">Info Rekening (Bank/E-Wallet)</label>
+                                    <textarea x-model="forms.transaction.account_info" class="w-full p-3 bg-slate-50 border rounded-xl text-sm" placeholder="Contoh: BCA 12345678 a.n Budi" required></textarea>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-500 block mb-1">Nominal Penarikan</label>
+                                    <input x-model="forms.transaction.amount" type="number" class="w-full p-3 bg-slate-50 border rounded-xl text-sm" placeholder="Min. 50.000">
+                                </div>
+                                <button type="submit" class="w-full py-3 bg-slate-800 text-white font-bold rounded-xl shadow hover:bg-slate-900">Ajukan Penarikan</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- MEMBER: JOBS -->
                     <div x-show="view==='jobs'" class="p-4 space-y-4">
                         <h2 class="font-bold text-lg flex items-center gap-2"><i class="fa-brands fa-youtube text-red-600"></i> Misi Tersedia</h2>
                         <div x-show="!jobs.length" class="text-center text-slate-400 py-10">Tidak ada misi untuk level Anda saat ini.</div>
@@ -132,6 +214,7 @@
                         </template>
                     </div>
 
+                    <!-- MEMBER: DO JOB (PLAYER) -->
                     <div x-show="view==='do_job'" class="fixed inset-0 bg-black z-50 flex flex-col">
                         <div class="flex justify-between items-center p-4 text-white bg-gradient-to-b from-black/80 to-transparent absolute top-0 left-0 right-0 z-20">
                             <button @click="stopJob" class="text-sm font-bold bg-white/20 px-3 py-1 rounded-lg backdrop-blur">Keluar</button>
@@ -161,6 +244,7 @@
                         </div>
                     </div>
 
+                    <!-- MEMBER: VIP PLANS -->
                     <div x-show="view==='plans'" class="p-4 space-y-6">
                         <h2 class="font-bold text-xl text-center mb-4">Upgrade Level</h2>
                         <template x-for="p in plansList" :key="p.id">
@@ -182,6 +266,7 @@
                                         <div class="bg-slate-50 p-2 rounded"><span class="block text-slate-400">Komisi/Video</span><span class="font-bold text-sm" x-text="formatIdr(p.commission)"></span></div>
                                     </div>
                                     
+                                    <!-- Coupon Input -->
                                     <div class="flex gap-2 mb-4" x-data="{ code: '' }">
                                         <input x-model="code" placeholder="Kode Kupon" class="flex-1 bg-slate-50 border rounded px-3 text-sm">
                                         <button @click="buyPlan(p, code)" class="bg-secondary text-white px-4 rounded text-xs font-bold">BELI</button>
@@ -191,6 +276,7 @@
                         </template>
                     </div>
 
+                    <!-- MEMBER: REFERRAL -->
                     <div x-show="view==='referral'" class="p-4 space-y-4">
                         <div class="bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl p-6 text-white text-center shadow-lg">
                             <p class="text-xs opacity-80">Kode Referral Anda</p>
@@ -217,19 +303,25 @@
                         </div>
                     </div>
 
+                    <!-- ADMIN DASHBOARD -->
                     <div x-show="view==='admin'" class="p-4 pb-24 space-y-6">
                         <h2 class="font-bold text-xl">Admin Panel</h2>
                         
+                        <!-- Stats Grid -->
                         <div class="grid grid-cols-2 gap-3">
                             <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500"><p class="text-xs text-slate-400">Total User</p><h3 class="text-xl font-bold" x-text="adminData.stats.users"></h3></div>
                             <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500"><p class="text-xs text-slate-400">Total Deposit</p><h3 class="text-xl font-bold" x-text="formatIdr(adminData.stats.deposit)"></h3></div>
+                            <div class="bg-white p-4 rounded-xl shadow border-l-4 border-red-500"><p class="text-xs text-slate-400">Pending WD</p><h3 class="text-xl font-bold" x-text="formatIdr(adminData.stats.pending_wd)"></h3></div>
                         </div>
 
+                        <!-- Quick Actions -->
                         <div class="grid grid-cols-2 gap-3">
                              <button @click="adminView='add_job'" class="bg-secondary text-white py-3 rounded-xl text-sm font-bold">Tambah Job</button>
                              <button @click="adminView='settings'" class="bg-secondary text-white py-3 rounded-xl text-sm font-bold">Pengaturan</button>
+                             <button @click="adminView='create_plan'" class="bg-secondary text-white py-3 rounded-xl text-sm font-bold">Buat Plan</button>
                         </div>
 
+                        <!-- Sub Views: Settings -->
                         <div x-show="adminView==='settings'" class="bg-white p-4 rounded-xl shadow">
                             <h3 class="font-bold mb-4">Pengaturan Situs</h3>
                             <div class="space-y-3">
@@ -244,6 +336,28 @@
                             </div>
                         </div>
 
+                        <!-- Sub Views: Create Plan -->
+                        <div x-show="adminView==='create_plan'" class="bg-white p-4 rounded-xl shadow">
+                            <h3 class="font-bold mb-4">Buat Paket/Level Baru</h3>
+                            <form @submit.prevent="createPlan" class="space-y-3">
+                                <input x-model="forms.plan.name" placeholder="Nama Paket (misal: VIP 1)" class="w-full p-2 border rounded text-sm" required>
+                                <input x-model="forms.plan.price" type="number" placeholder="Harga" class="w-full p-2 border rounded text-sm" required>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input x-model="forms.plan.duration" type="number" placeholder="Durasi (Hari)" class="w-full p-2 border rounded text-sm" required>
+                                    <input x-model="forms.plan.daily_jobs" type="number" placeholder="Max Job/Hari" class="w-full p-2 border rounded text-sm" required>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input x-model="forms.plan.commission" type="number" placeholder="Komisi/Video" class="w-full p-2 border rounded text-sm" required>
+                                    <div class="flex items-center gap-2 border px-2 rounded">
+                                        <input type="checkbox" x-model="forms.plan.return_capital"> <span class="text-xs">Modal Kembali?</span>
+                                    </div>
+                                </div>
+                                <input x-model="forms.plan.thumbnail" placeholder="URL Gambar" class="w-full p-2 border rounded text-sm">
+                                <button type="submit" class="w-full py-2 bg-primary text-white rounded font-bold">Simpan Paket</button>
+                            </form>
+                        </div>
+
+                        <!-- Sub Views: Add Job -->
                         <div x-show="adminView==='add_job'" class="bg-white p-4 rounded-xl shadow">
                             <h3 class="font-bold mb-4">Tambah Job Baru</h3>
                             <input x-model="forms.job.title" placeholder="Judul Video" class="w-full p-2 border rounded mb-3">
@@ -254,18 +368,23 @@
                             <button @click="createJob" class="w-full py-2 bg-primary text-white rounded font-bold">Posting</button>
                         </div>
                         
+                        <!-- User Management List -->
                         <div class="bg-white rounded-xl shadow overflow-hidden">
-                            <div class="p-4 border-b font-bold">Daftar Member</div>
-                            <div class="max-h-60 overflow-y-auto">
+                            <div class="p-4 border-b font-bold bg-slate-50">Daftar Member</div>
+                            <div class="max-h-80 overflow-y-auto">
                                 <template x-for="u in adminData.users" :key="u.id">
-                                    <div class="p-3 border-b flex justify-between items-center text-sm">
+                                    <div class="p-3 border-b flex justify-between items-center text-sm last:border-0">
                                         <div>
                                             <p class="font-bold" x-text="u.username"></p>
                                             <p class="text-xs text-slate-400" x-text="u.email"></p>
+                                            <p class="text-xs text-primary font-bold mt-1" x-text="formatIdr(u.balance)"></p>
                                         </div>
-                                        <div class="flex gap-2">
-                                            <button @click="resetPass(u.id)" class="bg-yellow-100 text-yellow-600 px-2 py-1 rounded text-[10px] font-bold">Reset PW</button>
-                                            <button @click="toggleBan(u.id, u.status)" class="px-2 py-1 rounded text-[10px] font-bold text-white" :class="u.status==='active'?'bg-red-500':'bg-green-500'" x-text="u.status==='active'?'BAN':'UNBAN'"></button>
+                                        <div class="flex flex-col gap-1 text-right">
+                                            <span class="text-[10px] px-2 py-0.5 rounded font-bold" :class="u.status==='active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'" x-text="u.status"></span>
+                                            <div class="flex gap-1">
+                                                <button @click="resetPass(u.id)" class="bg-yellow-100 text-yellow-600 px-2 py-1 rounded text-[10px] font-bold">Pass</button>
+                                                <button @click="toggleBan(u.id, u.status)" class="px-2 py-1 rounded text-[10px] font-bold text-white" :class="u.status==='active'?'bg-red-500':'bg-green-500'" x-text="u.status==='active'?'BAN':'UNBAN'"></button>
+                                            </div>
                                         </div>
                                     </div>
                                 </template>
@@ -275,6 +394,7 @@
 
                 </main>
 
+                <!-- BOTTOM NAV -->
                 <nav class="bg-white border-t flex justify-around items-center py-2 sticky bottom-0 pb-safe z-40" x-show="view !== 'do_job'">
                     <button @click="view='home'" :class="view==='home'?'text-primary':'text-slate-400'" class="flex flex-col items-center w-16"><i class="fa-solid fa-house text-xl mb-1"></i><span class="text-[10px] font-bold">Home</span></button>
                     <button @click="view='jobs'" :class="view==='jobs'?'text-primary':'text-slate-400'" class="flex flex-col items-center w-16"><i class="fa-solid fa-play text-xl mb-1"></i><span class="text-[10px] font-bold">Misi</span></button>
@@ -307,6 +427,7 @@
                 jobs: [],
                 plansList: [],
                 completedIds: [],
+                history: [],
                 plan: null,
                 settings: {},
                 
@@ -320,7 +441,9 @@
                 forms: {
                     auth: { username: '', password: '', email: '', referral_code: '' },
                     job: { title: '', url: '', min_plan: 1 },
-                    settings: { l1: 10, l2: 5, l3: 2, running_text: '' }
+                    settings: { l1: 10, l2: 5, l3: 2, running_text: '' },
+                    transaction: { amount: '', method: 'Transfer Bank', account_info: '' },
+                    plan: { name: '', price: '', duration: 30, daily_jobs: 10, commission: 500, return_capital: false, thumbnail: '' }
                 },
                 
                 // Admin Data
@@ -329,9 +452,9 @@
                 async init() {
                     if (this.token) {
                         await this.fetchUserData();
+                        await this.fetchHistory(); // Fetch transaksi
                         await this.fetchSettings();
                     }
-                    // Visibility Listener
                     document.addEventListener("visibilitychange", () => {
                         this.isFocused = !document.hidden;
                     });
@@ -379,7 +502,6 @@
                         this.user = { ...this.user, ...res.user };
                         this.plan = res.plan;
                         
-                        // Fetch Jobs & Plans
                         const jRes = await this.req(`/jobs?user_id=${this.user.id}`);
                         this.jobs = jRes.jobs;
                         this.completedIds = jRes.completed_ids;
@@ -388,8 +510,33 @@
                         this.plansList = pRes;
                     } catch (e) { if(e.message.includes('found')) this.logout(); }
                 },
+                async fetchHistory() {
+                    try { this.history = await this.req(`/transactions?user_id=${this.user.id}`); } catch(e){}
+                },
                 async fetchSettings() {
                     try { this.settings = await this.req('/admin?type=settings'); } catch(e){}
+                },
+
+                // --- TRANSACTION LOGIC (DEPOSIT/WITHDRAW) ---
+                async handleTransaction(type) {
+                    const f = this.forms.transaction;
+                    if(!f.amount || f.amount <= 0) return this.showToast('Masukkan nominal yang valid', 'error');
+                    
+                    try {
+                        await this.req('/transactions', 'POST', {
+                            user_id: this.user.id,
+                            type: type,
+                            amount: parseFloat(f.amount),
+                            method: f.method,
+                            account_info: f.account_info
+                        });
+                        this.showToast(`${type === 'deposit' ? 'Deposit' : 'Penarikan'} Berhasil Diajukan`);
+                        this.fetchUserData();
+                        this.fetchHistory();
+                        // Reset form
+                        this.forms.transaction.amount = '';
+                        this.forms.transaction.account_info = '';
+                    } catch(e){}
                 },
 
                 // --- JOB PLAYER LOGIC ---
@@ -440,6 +587,11 @@
                     await this.req('/admin', 'POST', { action: 'create_job', ...this.forms.job });
                     this.showToast('Job Posted');
                     this.forms.job.title = '';
+                },
+                async createPlan() {
+                    await this.req('/admin', 'POST', { action: 'create_plan', ...this.forms.plan });
+                    this.showToast('Paket Dibuat');
+                    this.adminView = 'stats';
                 },
                 async saveSettings() {
                     await this.req('/admin', 'POST', { action: 'update_settings', ...this.forms.settings });
