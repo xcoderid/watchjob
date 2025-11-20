@@ -27,41 +27,34 @@ export async function onRequestPost(context) {
         }
       }
 
-      // 1. Cek Saldo Dinamis
       const balance = await getUserBalance(env, user_id);
       if (balance < finalPrice) return jsonResponse({ error: 'Saldo tidak cukup' }, 400);
 
       const end = new Date(); end.setDate(end.getDate() + plan.duration_days);
       const ops = [];
 
-      // 2. Catat Pengeluaran (Expense) -> Ini akan mengurangi saldo secara otomatis di getUserBalance
       ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'expense', ?, ?, 'success')").bind(user_id, finalPrice, `Beli ${plan.name}`));
       
-      // 3. Update Subscription
       ops.push(env.DB.prepare("UPDATE user_subscriptions SET status = 'expired' WHERE user_id = ?").bind(user_id));
       ops.push(env.DB.prepare("INSERT INTO user_subscriptions (user_id, plan_id, end_date) VALUES (?, ?, ?)").bind(user_id, plan.id, end.toISOString()));
 
-      // 4. Affiliate Bonus (Mekanisme 3 Level)
       const user = await env.DB.prepare('SELECT referrer_id FROM users WHERE id = ?').bind(user_id).first();
       if (user.referrer_id && finalPrice > 0) {
           const settings = await env.DB.prepare("SELECT key, value FROM site_settings WHERE key LIKE 'affiliate_l%'").all();
           const rates = {};
           settings.results.forEach(s => rates[s.key] = parseFloat(s.value));
 
-          // Level 1
           const l1 = await env.DB.prepare('SELECT id, referrer_id FROM users WHERE id = ?').bind(user.referrer_id).first();
           if (l1) {
              const comm1 = (finalPrice * (rates['affiliate_l1']||10)) / 100;
              if(comm1>0) ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l1.id, comm1, `Komisi L1`));
              
-             // Level 2
              if (l1.referrer_id) {
                  const l2 = await env.DB.prepare('SELECT id, referrer_id FROM users WHERE id = ?').bind(l1.referrer_id).first();
                  if(l2) {
                      const comm2 = (finalPrice * (rates['affiliate_l2']||5)) / 100;
                      if(comm2>0) ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l2.id, comm2, `Komisi L2`));
                      
-                     // Level 3
                      if (l2.referrer_id) {
                         const l3 = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(l2.referrer_id).first();
                         if(l3) {
