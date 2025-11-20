@@ -1,51 +1,52 @@
-import { jsonResponse, getYoutubeId, getUserBalance } from '../utils';
+import { jsonResponse, authenticateUser, getYoutubeId, getUserBalance, hashPassword } from '../utils';
 
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
 
+  // STRICT ADMIN CHECK
+  const user = await authenticateUser(env, request);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: 'Forbidden' }, 403);
+
   try {
     if (type === 'stats') {
       const userCount = await env.DB.prepare('SELECT COUNT(*) as total FROM users').first();
       const depositSum = await env.DB.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'deposit' AND status = 'success'").first();
       const pendingWd = await env.DB.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'withdrawal' AND status = 'pending'").first();
+      const pendingDepo = await env.DB.prepare("SELECT SUM(amount) as total FROM transactions WHERE type = 'deposit' AND status = 'pending'").first();
       
       return jsonResponse({
         users: userCount.total || 0,
         deposit: depositSum.total || 0,
-        pending_wd: pendingWd.total || 0
+        pending_wd: pendingWd.total || 0,
+        pending_depo: pendingDepo.total || 0
       });
     }
     
     if (type === 'users') {
-      const res = await env.DB.prepare(`
-        SELECT id, username, email, status, role, created_at 
-        FROM users 
-        ORDER BY id DESC 
-        LIMIT 50
-      `).all();
-      
-      const usersWithBalance = [];
-      for (const u of res.results) {
-          const bal = await getUserBalance(env, u.id);
-          usersWithBalance.push({ ...u, balance: bal });
-      }
-      
+      const res = await env.DB.prepare(`SELECT id, username, email, status, role, created_at FROM users ORDER BY id DESC LIMIT 50`).all();
+      // Populate balance for display
+      const usersWithBalance = await Promise.all(res.results.map(async u => ({ ...u, balance: await getUserBalance(env, u.id) })));
       return jsonResponse(usersWithBalance);
     }
 
-    if (type === 'transactions') {
-       const res = await env.DB.prepare("SELECT * FROM transactions WHERE type IN ('deposit', 'withdrawal') ORDER BY created_at DESC LIMIT 50").all();
+    if (type === 'pending_tx') {
+       // Fetch both pending deposits and withdrawals
+       const res = await env.DB.prepare(`
+         SELECT t.*, u.username 
+         FROM transactions t
+         JOIN users u ON t.user_id = u.id
+         WHERE t.status = 'pending'
+         ORDER BY t.created_at ASC
+       `).all();
        return jsonResponse(res.results);
     }
 
     if (type === 'settings') {
        const res = await env.DB.prepare('SELECT * FROM site_settings').all();
        const settings = {};
-       if(res.results) {
-           res.results.forEach(r => settings[r.key] = r.value);
-       }
+       if(res.results) res.results.forEach(r => settings[r.key] = r.value);
        return jsonResponse(settings);
     }
 
@@ -63,6 +64,10 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+  
+  const user = await authenticateUser(env, request);
+  if (!user || user.role !== 'admin') return jsonResponse({ error: 'Forbidden' }, 403);
+
   const body = await request.json();
   const { action } = body;
 
@@ -84,6 +89,7 @@ export async function onRequestPost(context) {
         if (!vidId) return jsonResponse({ error: 'URL Youtube tidak valid' }, 400);
 
         const cleanUrl = `https://www.youtube.com/watch?v=${vidId}`;
+        // Fetch duration from plan or default
         const plan = await env.DB.prepare('SELECT watch_duration FROM plans WHERE id = ?').bind(min_plan).first();
         const duration = plan ? plan.watch_duration : 30;
 
@@ -93,17 +99,14 @@ export async function onRequestPost(context) {
 
     if (action === 'create_plan') {
         const { name, price, duration, daily_jobs, commission, return_capital, thumbnail } = body;
-        const watchDur = 30; 
-
         await env.DB.prepare(`
           INSERT INTO plans (name, price, duration_days, daily_jobs_limit, commission, return_capital, watch_duration, thumbnail_url, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, watchDur, thumbnail).run();
-        
+          VALUES (?, ?, ?, ?, ?, ?, 30, ?, 1)
+        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, thumbnail).run();
         return jsonResponse({ success: true });
     }
 
-    if (action === 'process_wd') {
+    if (action === 'process_tx') {
         const { tx_id, decision } = body; 
         const status = decision === 'approve' ? 'success' : 'failed';
         await env.DB.prepare("UPDATE transactions SET status = ? WHERE id = ?").bind(status, tx_id).run();
@@ -111,12 +114,8 @@ export async function onRequestPost(context) {
     }
 
     if (action === 'user_action') {
-        const { user_id, type, new_pass } = body; 
-        
-        if (type === 'reset_pass') {
-            if(!new_pass) return jsonResponse({ error: 'Password baru diperlukan' }, 400);
-            await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(new_pass, user_id).run();
-        } else if (type === 'ban' || type === 'unban') {
+        const { user_id, type } = body; 
+        if (type === 'ban' || type === 'unban') {
             const status = type === 'ban' ? 'banned' : 'active';
             await env.DB.prepare('UPDATE users SET status = ? WHERE id = ?').bind(status, user_id).run();
         }
