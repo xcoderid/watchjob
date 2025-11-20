@@ -1,3 +1,4 @@
+// functions/utils.js
 export const jsonResponse = (data, status = 200) => {
   return new Response(JSON.stringify(data), {
     status: status,
