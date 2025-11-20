@@ -3,19 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Admin Panel - AdView</title>
+    <title>Admin Console - Enterprise</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
-
+    
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('adminApp', () => ({
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { primary: '#0f172a', accent: '#3b82f6', success: '#10b981', danger: '#ef4444' },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+
+    <!-- LOGIKA ADMIN (Global Function - Anti Blank) -->
+    <script>
+        function adminApp() {
+            return {
                 token: localStorage.getItem('token'),
-                user: JSON.parse(localStorage.getItem('user') || '{}'),
+                user: JSON.parse(localStorage.getItem('user') || 'null'),
                 view: 'dashboard',
                 toast: { show: false, msg: '', type: 'success' },
                 
+                // Data Containers (Default Value biar gak error undefined)
                 stats: { users:0, deposit:0, pending_wd:0, pending_depo:0 },
                 pendingTx: [],
                 users: [],
@@ -28,7 +40,8 @@
                 },
 
                 async init() {
-                    if (!this.token || this.user.role !== 'admin') {
+                    // Security Check
+                    if (!this.token || !this.user || this.user.role !== 'admin') {
                         window.location.href = 'index.html';
                         return;
                     }
@@ -38,55 +51,84 @@
                 async api(url, method = 'GET', body = null) {
                     const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` } };
                     if (body) opts.body = JSON.stringify(body);
-                    const res = await fetch(`/api${url}`, opts);
-                    return await res.json();
+                    
+                    try {
+                        const res = await fetch(`/api${url}`, opts);
+                        const json = await res.json();
+                        if (!res.ok) throw { message: json.error || 'Server Error', status: res.status };
+                        return json;
+                    } catch (e) {
+                        this.showToast(e.message, 'error');
+                        if(e.status === 401) this.logout();
+                        throw e;
+                    }
                 },
 
                 async loadData() {
-                    this.stats = await this.api('/admin?type=stats');
-                    this.pendingTx = await this.api('/admin?type=pending_tx');
-                    this.users = await this.api('/admin?type=users');
-                    this.plans = await this.api('/admin?type=plans');
-                    const s = await this.api('/admin?type=settings');
-                    this.settings = { 
-                        l1: s.l1 || 10, l2: s.l2 || 5, l3: s.l3 || 2, 
-                        running_text: s.running_text || '' 
-                    };
+                    try {
+                        // Load parallel biar cepat
+                        const [s, pTx, u, pl, set] = await Promise.all([
+                            this.api('/admin?type=stats'),
+                            this.api('/admin?type=pending_tx'),
+                            this.api('/admin?type=users'),
+                            this.api('/admin?type=plans'),
+                            this.api('/admin?type=settings')
+                        ]);
+
+                        this.stats = s;
+                        this.pendingTx = pTx;
+                        this.users = u;
+                        this.plans = pl;
+                        this.settings = { 
+                            l1: set.l1 || 0, l2: set.l2 || 0, l3: set.l3 || 0, 
+                            running_text: set.running_text || '' 
+                        };
+                    } catch(e) { console.error("Load Data Error", e); }
                 },
 
                 async processTx(id, decision) {
-                    if(!confirm(decision==='approve'?'Setujui?':'Tolak?')) return;
-                    await this.api('/admin', 'POST', { action: 'process_tx', tx_id: id, decision });
-                    this.showToast('Transaksi Diproses');
-                    this.loadData();
+                    if(!confirm(decision==='approve'?'Setujui Transaksi?':'Tolak Transaksi?')) return;
+                    try {
+                        await this.api('/admin', 'POST', { action: 'process_tx', tx_id: id, decision });
+                        this.showToast('Berhasil diproses');
+                        this.loadData();
+                    } catch(e){}
                 },
 
                 async createJob() {
-                    await this.api('/admin', 'POST', { action: 'create_job', ...this.forms.job });
-                    this.showToast('Job Ditambahkan');
-                    this.forms.job.title = '';
+                    try {
+                        await this.api('/admin', 'POST', { action: 'create_job', ...this.forms.job });
+                        this.showToast('Misi Video Ditambahkan');
+                        this.forms.job.title = '';
+                    } catch(e){}
                 },
 
                 async createPlan() {
                     const p = this.forms.plan;
-                    await this.api('/admin', 'POST', { 
-                        action: 'create_plan', 
-                        name: p.name, price: parseFloat(p.price), duration: parseInt(p.duration),
-                        daily_jobs: parseInt(p.daily_jobs), commission: parseFloat(p.commission),
-                        return_capital: p.return_capital, thumbnail: p.thumbnail 
-                    });
-                    this.showToast('Plan Dibuat');
-                    this.loadData();
+                    try {
+                        await this.api('/admin', 'POST', { 
+                            action: 'create_plan', 
+                            name: p.name, price: parseFloat(p.price), duration: parseInt(p.duration),
+                            daily_jobs: parseInt(p.daily_jobs), commission: parseFloat(p.commission),
+                            return_capital: p.return_capital, thumbnail: p.thumbnail 
+                        });
+                        this.showToast('Paket Membership Dibuat');
+                        this.loadData();
+                    } catch(e){}
                 },
 
                 async saveSettings() {
-                    await this.api('/admin', 'POST', { action: 'update_settings', ...this.settings });
-                    this.showToast('Pengaturan Disimpan');
+                    try {
+                        await this.api('/admin', 'POST', { action: 'update_settings', ...this.settings });
+                        this.showToast('Pengaturan Disimpan');
+                    } catch(e){}
                 },
 
                 async toggleUser(uid, status) {
-                    await this.api('/admin', 'POST', { action: 'user_action', user_id: uid, type: status==='active'?'ban':'unban' });
-                    this.loadData();
+                    try {
+                        await this.api('/admin', 'POST', { action: 'user_action', user_id: uid, type: status==='active'?'ban':'unban' });
+                        this.loadData();
+                    } catch(e){}
                 },
 
                 logout() {
@@ -96,12 +138,15 @@
                 
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 showToast(msg, type='success') { this.toast = { show: true, msg, type }; setTimeout(() => this.toast.show = false, 3000); }
-            }));
-        });
+            }
+        }
     </script>
+
+    <!-- Alpine JS (Defer Wajib) -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
     <style>[x-cloak] { display: none !important; } .no-scrollbar::-webkit-scrollbar { display: none; }</style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col overflow-hidden" x-data="adminApp">
+<body class="bg-slate-100 text-slate-800 font-sans h-screen flex flex-col overflow-hidden" x-data="adminApp()" x-init="init()">
 
     <!-- Toast -->
     <div class="fixed top-5 right-5 z-50" x-show="toast.show" x-transition x-cloak>
@@ -111,21 +156,25 @@
     </div>
 
     <!-- Header -->
-    <header class="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md">
-        <div class="flex items-center gap-3"><div class="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center font-bold">A</div><h1 class="font-bold">Admin Panel</h1></div>
-        <button @click="logout" class="bg-slate-800 hover:bg-red-600 px-3 py-1 rounded text-xs font-bold transition">LOGOUT</button>
+    <header class="bg-slate-900 text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-20">
+        <div class="flex items-center gap-3"><div class="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center font-bold">A</div><h1 class="font-bold text-lg tracking-wide">Admin Console</h1></div>
+        <div class="flex items-center gap-4">
+            <span class="text-sm text-slate-400">Administrator</span>
+            <button @click="logout" class="bg-slate-800 hover:bg-red-600 px-3 py-1 rounded text-xs font-bold transition border border-slate-700">LOGOUT</button>
+        </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         <!-- Sidebar -->
-        <aside class="w-64 bg-white border-r flex flex-col">
+        <aside class="w-64 bg-white border-r border-slate-200 flex flex-col z-10">
             <nav class="flex-1 p-4 space-y-1">
-                <button @click="view='dashboard'" :class="view==='dashboard'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-gauge"></i> Dashboard</button>
-                <button @click="view='approvals'" :class="view==='approvals'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-check-to-slot"></i> Approvals <span x-show="stats.pending_wd+stats.pending_depo > 0" class="bg-red-500 text-white text-[10px] px-1.5 rounded-full" x-text="stats.pending_wd+stats.pending_depo"></span></button>
-                <button @click="view='users'" :class="view==='users'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-users"></i> Users</button>
-                <button @click="view='content'" :class="view==='content'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-box-open"></i> Content</button>
-                <button @click="view='settings'" :class="view==='settings'?'bg-slate-100 text-emerald-600':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-lg text-sm font-bold flex items-center gap-3"><i class="fa-solid fa-gear"></i> Settings</button>
+                <button @click="view='dashboard'" :class="view==='dashboard'?'bg-slate-100 text-emerald-700 border-r-4 border-emerald-500':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-r-lg text-sm font-bold flex items-center gap-3 transition-all"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</button>
+                <button @click="view='approvals'" :class="view==='approvals'?'bg-slate-100 text-emerald-700 border-r-4 border-emerald-500':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-r-lg text-sm font-bold flex items-center gap-3 transition-all"><i class="fa-solid fa-check-to-slot w-5 text-center"></i> Approvals <span x-show="(stats.pending_wd+stats.pending_depo) > 0" class="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-auto" x-text="stats.pending_wd+stats.pending_depo"></span></button>
+                <button @click="view='users'" :class="view==='users'?'bg-slate-100 text-emerald-700 border-r-4 border-emerald-500':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-r-lg text-sm font-bold flex items-center gap-3 transition-all"><i class="fa-solid fa-users w-5 text-center"></i> Users</button>
+                <button @click="view='content'" :class="view==='content'?'bg-slate-100 text-emerald-700 border-r-4 border-emerald-500':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-r-lg text-sm font-bold flex items-center gap-3 transition-all"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</button>
+                <button @click="view='settings'" :class="view==='settings'?'bg-slate-100 text-emerald-700 border-r-4 border-emerald-500':'text-slate-600 hover:bg-slate-50'" class="w-full text-left px-4 py-3 rounded-r-lg text-sm font-bold flex items-center gap-3 transition-all"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</button>
             </nav>
+            <div class="p-4 border-t text-xs text-center text-slate-400">v2.0 Enterprise</div>
         </aside>
 
         <!-- Main Content -->
@@ -133,34 +182,34 @@
             
             <!-- DASHBOARD -->
             <div x-show="view==='dashboard'" class="space-y-6">
-                <h2 class="text-2xl font-bold text-slate-800">Ringkasan</h2>
+                <h2 class="text-2xl font-bold text-slate-800">Ringkasan Sistem</h2>
                 <div class="grid grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-emerald-500"><p class="text-slate-400 text-sm font-bold uppercase">Total Deposit</p><h3 class="text-3xl font-bold text-slate-800" x-text="fmtMoney(stats.deposit)"></h3></div>
-                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500"><p class="text-slate-400 text-sm font-bold uppercase">Total User</p><h3 class="text-3xl font-bold text-slate-800" x-text="stats.users"></h3></div>
-                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500"><p class="text-slate-400 text-sm font-bold uppercase">Pending WD</p><h3 class="text-3xl font-bold text-slate-800" x-text="stats.pending_wd"></h3></div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-emerald-500"><p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Deposit Masuk</p><h3 class="text-2xl font-bold text-slate-800 mt-1" x-text="fmtMoney(stats.deposit)"></h3></div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500"><p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Total User Aktif</p><h3 class="text-2xl font-bold text-slate-800 mt-1" x-text="stats.users"></h3></div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500"><p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Pending Withdrawal</p><h3 class="text-2xl font-bold text-slate-800 mt-1" x-text="stats.pending_wd"></h3></div>
                 </div>
             </div>
 
             <!-- APPROVALS -->
             <div x-show="view==='approvals'" class="space-y-6">
-                <h2 class="text-2xl font-bold text-slate-800">Permintaan Approval</h2>
+                <h2 class="text-2xl font-bold text-slate-800">Approval Transaksi</h2>
                 <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <table class="w-full text-sm text-left">
                         <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs"><tr><th class="p-4">Tipe</th><th class="p-4">User</th><th class="p-4">Jumlah</th><th class="p-4">Info</th><th class="p-4 text-right">Aksi</th></tr></thead>
                         <tbody class="divide-y">
                             <template x-for="tx in pendingTx" :key="tx.id">
-                                <tr>
+                                <tr class="hover:bg-slate-50">
                                     <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="tx.type==='deposit'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'" x-text="tx.type"></span></td>
                                     <td class="p-4 font-bold" x-text="tx.username"></td>
-                                    <td class="p-4" x-text="fmtMoney(tx.amount)"></td>
+                                    <td class="p-4 font-mono" x-text="fmtMoney(tx.amount)"></td>
                                     <td class="p-4 text-xs text-slate-500" x-text="tx.description"></td>
                                     <td class="p-4 text-right space-x-2">
-                                        <button @click="processTx(tx.id, 'approve')" class="bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-emerald-600">TERIMA</button>
-                                        <button @click="processTx(tx.id, 'reject')" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold hover:bg-red-600">TOLAK</button>
+                                        <button @click="processTx(tx.id, 'approve')" class="bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-600 shadow-sm">TERIMA</button>
+                                        <button @click="processTx(tx.id, 'reject')" class="bg-red-500 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-red-600 shadow-sm">TOLAK</button>
                                     </td>
                                 </tr>
                             </template>
-                            <tr x-show="!pendingTx.length"><td colspan="5" class="p-8 text-center text-slate-400">Tidak ada transaksi pending.</td></tr>
+                            <tr x-show="!pendingTx.length"><td colspan="5" class="p-10 text-center text-slate-400 italic">Tidak ada transaksi yang menunggu persetujuan.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -168,19 +217,19 @@
 
             <!-- USERS -->
             <div x-show="view==='users'" class="space-y-6">
-                <h2 class="text-2xl font-bold text-slate-800">Manajemen User</h2>
+                <h2 class="text-2xl font-bold text-slate-800">Database User</h2>
                 <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <table class="w-full text-sm text-left">
                         <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs"><tr><th class="p-4">Username</th><th class="p-4">Email</th><th class="p-4">Saldo</th><th class="p-4">Status</th><th class="p-4 text-right">Aksi</th></tr></thead>
                         <tbody class="divide-y">
                             <template x-for="u in users" :key="u.id">
-                                <tr>
+                                <tr class="hover:bg-slate-50">
                                     <td class="p-4 font-bold" x-text="u.username"></td>
-                                    <td class="p-4" x-text="u.email"></td>
-                                    <td class="p-4" x-text="fmtMoney(u.balance)"></td>
+                                    <td class="p-4 text-slate-500" x-text="u.email"></td>
+                                    <td class="p-4 font-mono" x-text="fmtMoney(u.balance)"></td>
                                     <td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold uppercase" :class="u.status==='active'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'" x-text="u.status"></span></td>
                                     <td class="p-4 text-right">
-                                        <button @click="toggleUser(u.id, u.status)" class="border border-slate-300 px-3 py-1 rounded text-xs font-bold hover:bg-slate-50" x-text="u.status==='active'?'BAN USER':'UNBAN'"></button>
+                                        <button @click="toggleUser(u.id, u.status)" class="border border-slate-300 px-3 py-1 rounded text-xs font-bold hover:bg-slate-100 transition" x-text="u.status==='active'?'BAN ACCOUNT':'UNBAN ACCOUNT'"></button>
                                     </td>
                                 </tr>
                             </template>
@@ -189,54 +238,61 @@
                 </div>
             </div>
 
-            <!-- CONTENT -->
-            <div x-show="view==='content'" class="space-y-6">
-                <div class="grid grid-cols-2 gap-6">
-                    <!-- Add Job -->
-                    <div class="bg-white p-6 rounded-xl shadow-sm border">
-                        <h3 class="font-bold mb-4">Tambah Misi Video</h3>
-                        <div class="space-y-3">
-                            <input x-model="forms.job.url" placeholder="Link Youtube" class="w-full p-2 border rounded text-sm">
-                            <input x-model="forms.job.title" placeholder="Judul Video" class="w-full p-2 border rounded text-sm">
-                            <select x-model="forms.job.min_plan" class="w-full p-2 border rounded text-sm"><template x-for="p in plans" :key="p.id"><option :value="p.id" x-text="p.name"></option></template></select>
-                            <button @click="createJob" class="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold w-full">POSTING</button>
+            <!-- CONTENT (JOBS & PLANS) -->
+            <div x-show="view==='content'" class="space-y-8">
+                <!-- Jobs -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border">
+                    <h3 class="font-bold text-lg text-slate-700 mb-4 border-b pb-2">1. Tambah Video Misi</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div><label class="text-xs font-bold text-slate-500">Link Youtube</label><input x-model="forms.job.url" placeholder="https://youtube.com/..." class="w-full p-2 border rounded text-sm mt-1"></div>
+                        <div><label class="text-xs font-bold text-slate-500">Judul Video</label><input x-model="forms.job.title" placeholder="Judul..." class="w-full p-2 border rounded text-sm mt-1"></div>
+                        <div class="flex gap-2">
+                            <div class="flex-1"><label class="text-xs font-bold text-slate-500">Min Level</label><select x-model="forms.job.min_plan" class="w-full p-2 border rounded text-sm mt-1"><template x-for="p in plans" :key="p.id"><option :value="p.id" x-text="p.name"></option></template></select></div>
+                            <button @click="createJob" class="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold h-[38px] mt-auto">POSTING</button>
                         </div>
                     </div>
-                    <!-- Add Plan -->
-                    <div class="bg-white p-6 rounded-xl shadow-sm border">
-                        <h3 class="font-bold mb-4">Buat Paket Baru</h3>
-                        <div class="grid grid-cols-2 gap-3 mb-3">
-                            <input x-model="forms.plan.name" placeholder="Nama Paket" class="p-2 border rounded text-sm">
-                            <input x-model="forms.plan.price" type="number" placeholder="Harga" class="p-2 border rounded text-sm">
-                            <input x-model="forms.plan.daily_jobs" type="number" placeholder="Limit Job" class="p-2 border rounded text-sm">
-                            <input x-model="forms.plan.commission" type="number" placeholder="Komisi" class="p-2 border rounded text-sm">
-                            <input x-model="forms.plan.duration" type="number" placeholder="Durasi (hari)" class="p-2 border rounded text-sm">
-                            <input x-model="forms.plan.thumbnail" placeholder="URL Gambar" class="p-2 border rounded text-sm">
-                        </div>
-                        <div class="mb-3"><label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="forms.plan.return_capital"> Modal Kembali?</label></div>
-                        <button @click="createPlan" class="bg-slate-800 text-white px-4 py-2 rounded text-sm font-bold w-full">BUAT PAKET</button>
+                </div>
+
+                <!-- Plans -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border">
+                    <h3 class="font-bold text-lg text-slate-700 mb-4 border-b pb-2">2. Buat Paket Level Baru</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div><label class="text-xs font-bold text-slate-500">Nama Paket</label><input x-model="forms.plan.name" class="w-full p-2 border rounded text-sm mt-1" placeholder="VIP 1"></div>
+                        <div><label class="text-xs font-bold text-slate-500">Harga (IDR)</label><input x-model="forms.plan.price" type="number" class="w-full p-2 border rounded text-sm mt-1" placeholder="0"></div>
+                        <div><label class="text-xs font-bold text-slate-500">Komisi/Video (IDR)</label><input x-model="forms.plan.commission" type="number" class="w-full p-2 border rounded text-sm mt-1" placeholder="0"></div>
+                        <div><label class="text-xs font-bold text-slate-500">Limit Harian</label><input x-model="forms.plan.daily_jobs" type="number" class="w-full p-2 border rounded text-sm mt-1" placeholder="5"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div><label class="text-xs font-bold text-slate-500">Durasi (Hari)</label><input x-model="forms.plan.duration" type="number" class="w-full p-2 border rounded text-sm mt-1" placeholder="30"></div>
+                        <div><label class="text-xs font-bold text-slate-500">Thumbnail URL</label><input x-model="forms.plan.thumbnail" class="w-full p-2 border rounded text-sm mt-1" placeholder="https://..."></div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                         <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" x-model="forms.plan.return_capital" class="w-4 h-4"> <span class="font-bold text-slate-600">Fitur Modal Kembali?</span></label>
+                         <button @click="createPlan" class="bg-emerald-600 text-white px-6 py-2 rounded text-sm font-bold shadow hover:bg-emerald-700">SIMPAN PAKET</button>
                     </div>
                 </div>
             </div>
 
             <!-- SETTINGS -->
             <div x-show="view==='settings'" class="space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow-sm border max-w-2xl">
-                    <h3 class="font-bold mb-4">Konfigurasi Global</h3>
+                <div class="bg-white p-6 rounded-xl shadow-sm border max-w-3xl">
+                    <h3 class="font-bold text-lg text-slate-700 mb-4 border-b pb-2">Konfigurasi Website</h3>
                     <div class="space-y-4">
                         <div>
-                            <label class="text-sm font-bold text-slate-500">Running Text</label>
-                            <textarea x-model="settings.running_text" class="w-full p-2 border rounded text-sm mt-1"></textarea>
+                            <label class="text-sm font-bold text-slate-600">Running Text (Pengumuman)</label>
+                            <textarea x-model="settings.running_text" class="w-full p-3 border rounded-lg text-sm mt-1 focus:ring-2 focus:ring-emerald-500 outline-none" rows="3"></textarea>
                         </div>
                         <div>
-                            <label class="text-sm font-bold text-slate-500">Affiliate Commission (%)</label>
-                            <div class="grid grid-cols-3 gap-4 mt-1">
-                                <div><span class="text-xs text-slate-400">Level 1</span><input x-model="settings.l1" class="w-full p-2 border rounded"></div>
-                                <div><span class="text-xs text-slate-400">Level 2</span><input x-model="settings.l2" class="w-full p-2 border rounded"></div>
-                                <div><span class="text-xs text-slate-400">Level 3</span><input x-model="settings.l3" class="w-full p-2 border rounded"></div>
+                            <label class="text-sm font-bold text-slate-600 block mb-2">Persentase Komisi Afiliasi (%)</label>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="bg-slate-50 p-3 rounded border"><span class="text-xs text-slate-400 block mb-1">Level 1 (Direct)</span><input x-model="settings.l1" class="w-full p-1 bg-transparent border-b border-slate-300 font-bold focus:border-emerald-500 outline-none"></div>
+                                <div class="bg-slate-50 p-3 rounded border"><span class="text-xs text-slate-400 block mb-1">Level 2</span><input x-model="settings.l2" class="w-full p-1 bg-transparent border-b border-slate-300 font-bold focus:border-emerald-500 outline-none"></div>
+                                <div class="bg-slate-50 p-3 rounded border"><span class="text-xs text-slate-400 block mb-1">Level 3</span><input x-model="settings.l3" class="w-full p-1 bg-transparent border-b border-slate-300 font-bold focus:border-emerald-500 outline-none"></div>
                             </div>
                         </div>
-                        <button @click="saveSettings" class="bg-emerald-500 text-white px-6 py-2 rounded font-bold text-sm">SIMPAN PERUBAHAN</button>
+                        <div class="pt-4 border-t">
+                            <button @click="saveSettings" class="bg-primary text-white px-8 py-2.5 rounded-lg font-bold text-sm shadow hover:bg-slate-800 transition">SIMPAN KONFIGURASI</button>
+                        </div>
                     </div>
                 </div>
             </div>
