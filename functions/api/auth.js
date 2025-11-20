@@ -1,4 +1,4 @@
-import { jsonResponse } from '../utils';
+import { jsonResponse, getUserBalance } from '../utils';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -18,7 +18,15 @@ export async function onRequestPost(context) {
       WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
     `).bind(user.id).first();
 
-    return jsonResponse({ success: true, user, plan: sub || null, token: `tok_${user.id}` });
+    // Hitung balance
+    const balance = await getUserBalance(env, user.id);
+
+    return jsonResponse({ 
+        success: true, 
+        user: { ...user, balance }, 
+        plan: sub || null, 
+        token: `tok_${user.id}` 
+    });
   }
 
   if (type === 'register') {
@@ -35,7 +43,6 @@ export async function onRequestPost(context) {
       const res = await env.DB.prepare(`INSERT INTO users (username, email, password_hash, referral_code, referrer_id) VALUES (?, ?, ?, ?, ?)`).bind(username, email, password, myRefCode, referrerId).run();
       const userId = res.meta.last_row_id;
       
-      // Auto Trial Plan
       const trial = await env.DB.prepare('SELECT id, duration_days FROM plans WHERE id = 1').first();
       if (trial) {
           const end = new Date(); end.setDate(end.getDate() + trial.duration_days);
