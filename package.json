@@ -1,5 +1,5 @@
 {
-  "name": "watchjobs",
+  "name": "watchjob",
   "version": "1.0.0",
   "description": "Serverless Membership Platform with Cloudflare Pages Functions",
   "scripts": {
