@@ -35,10 +35,11 @@
                 isLoading: false,
                 
                 // Custom Modal State
-                modal: { visible: false, title: '', message: '', onConfirm: null, type: 'info' }, // type: info, confirm
+                modal: { visible: false, title: '', message: '', onConfirm: null, type: 'info' },
 
                 // Data
                 dashboard: { income: 0, tasks_done: 0 },
+                currentPlan: null, // Menyimpan detail paket user aktif
                 jobs: [],
                 plans: [],
                 transactions: [],
@@ -59,11 +60,12 @@
                     bank: { bank_name: '', account_number: '', account_name: '' }
                 },
                 
-                // Player
+                // Player State
                 activeJob: null,
                 playerTimer: 0,
                 playerInterval: null,
                 isFocused: true,
+                playerStatus: 'idle', // idle, playing, done
 
                 // --- INIT ---
                 async init() {
@@ -111,6 +113,8 @@
                         ]);
                         
                         this.user = { ...this.user, ...uRes.user };
+                        // Simpan info plan user secara spesifik
+                        this.currentPlan = uRes.plan; 
                         this.bankInfo = uRes.bank_info || {};
                         this.referrals = uRes.referrals || { l1:[], l2:[], l3:[] };
                         this.dashboard = { income: uRes.user.today_income, tasks_done: uRes.user.tasks_done };
@@ -131,7 +135,6 @@
                     try {
                         const cleanPhone = this.forms.login.phone.replace(/^0+/, '');
                         const payload = { ...this.forms.login, phone: '62' + cleanPhone };
-                        
                         const res = await this.api('/auth?type=login', 'POST', payload);
                         this.handleAuthSuccess(res);
                     } catch(e){} finally { this.isLoading = false; }
@@ -143,7 +146,6 @@
                     try {
                         const cleanPhone = this.forms.register.phone.replace(/^0+/, '');
                         const payload = { ...this.forms.register, phone: '62' + cleanPhone };
-                        
                         await this.api('/auth?type=register', 'POST', payload);
                         this.showAlert('Sukses', 'Pendaftaran berhasil. Silakan login.');
                         this.authMode = 'login';
@@ -175,14 +177,14 @@
                             this.forms.deposit.amount = '';
                             this.view = 'history';
                             await this.refreshData();
-                            this.showAlert('Berhasil', 'Deposit diajukan. Silakan transfer & tunggu konfirmasi admin.');
+                            this.showAlert('Berhasil', 'Deposit diajukan.');
                         } catch(e){} finally { this.isLoading = false; this.modal.visible = false; }
                     });
                 },
 
                 async withdraw() {
                     if (!this.bankInfo.account_number) {
-                        this.showAlert('Data Bank Kosong', 'Silakan lengkapi data bank di menu Profil sebelum menarik dana.');
+                        this.showAlert('Data Bank Kosong', 'Silakan lengkapi data bank di menu Profil.');
                         this.view = 'bank_binding';
                         return;
                     }
@@ -201,6 +203,10 @@
                 },
 
                 async saveBank() {
+                    // Validasi sederhana untuk memastikan data bank terisi
+                    if(!this.forms.bank.bank_name || !this.forms.bank.account_number || !this.forms.bank.account_name){
+                        return this.showAlert('Gagal', 'Mohon lengkapi semua kolom data bank.');
+                    }
                     this.isLoading = true;
                     try {
                         await this.api('/users', 'POST', { action: 'update_bank', ...this.forms.bank });
@@ -232,14 +238,24 @@
                     });
                 },
 
-                // --- PLAYER ---
+                // --- PLAYER LOGIC (REVISED) ---
                 startJob(job) {
                     this.activeJob = job;
                     this.playerTimer = job.duration;
-                    this.view = 'player';
+                    this.playerStatus = 'idle';
+                    this.view = 'player'; // Pindah ke view player, bukan overlay full screen
                     if (this.playerInterval) clearInterval(this.playerInterval);
+                },
+
+                playVideo() {
+                    this.playerStatus = 'playing';
                     this.playerInterval = setInterval(() => {
-                        if (this.isFocused && this.playerTimer > 0) this.playerTimer--;
+                        if (this.isFocused && this.playerTimer > 0) {
+                            this.playerTimer--;
+                        } else if (this.playerTimer <= 0) {
+                            this.playerStatus = 'done';
+                            clearInterval(this.playerInterval);
+                        }
                     }, 1000);
                 },
 
@@ -254,7 +270,12 @@
                     } catch(e){} finally { this.isLoading = false; }
                 },
 
-                closePlayer() { clearInterval(this.playerInterval); this.activeJob = null; this.view = 'jobs'; },
+                closePlayer() { 
+                    clearInterval(this.playerInterval); 
+                    this.activeJob = null; 
+                    this.playerStatus = 'idle';
+                    this.view = 'jobs'; 
+                },
 
                 // --- HELPERS ---
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
@@ -268,12 +289,13 @@
     <style>
         [x-cloak] { display: none !important; }
         .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
-        .gradient-gold { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        /* Aspect Ratio untuk Video */
+        .aspect-video { aspect-ratio: 16 / 9; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col items-center" x-data="appData()" x-init="init()">
 
-    <!-- CUSTOM MODAL OVERLAY -->
+    <!-- MODAL -->
     <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-show="modal.visible" x-transition x-cloak>
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-100">
             <div class="p-6 text-center">
@@ -284,14 +306,13 @@
                 <p class="text-sm text-slate-500 mb-6" x-text="modal.message"></p>
                 <div class="flex gap-3">
                     <button x-show="modal.type==='confirm'" @click="modal.visible=false" class="flex-1 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50">Batal</button>
-                    <button @click="modal.onConfirm ? modal.onConfirm() : modal.visible=false" class="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg shadow-slate-200">OK</button>
+                    <button @click="modal.onConfirm ? modal.onConfirm() : modal.visible=false" class="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg">OK</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- AUTH SCREEN (PHONE BASED) -->
-    <!-- Menggunakan max-w-lg untuk konsistensi lebar dengan halaman utama -->
+    <!-- AUTH SCREEN -->
     <template x-if="!token">
         <div class="fixed inset-0 z-50 bg-slate-50 flex flex-col items-center justify-center p-6">
             <div class="w-full max-w-lg bg-white shadow-2xl rounded-3xl p-8 relative">
@@ -301,28 +322,24 @@
                     <p class="text-slate-400 text-sm">Platform Monetisasi Video</p>
                 </div>
                 
-                <!-- TABS -->
                 <div class="bg-slate-100 p-1.5 rounded-xl flex mb-8 relative">
                     <div class="absolute inset-y-1.5 w-1/2 bg-white rounded-lg shadow-sm transition-transform duration-300 ease-out" :class="authMode==='login'?'translate-x-0':'translate-x-full'"></div>
                     <button @click="authMode='login'" :class="authMode==='login'?'text-primary':'text-slate-400'" class="flex-1 py-2.5 text-sm font-bold rounded-lg relative z-10 transition">Masuk</button>
                     <button @click="authMode='register'" :class="authMode==='register'?'text-primary':'text-slate-400'" class="flex-1 py-2.5 text-sm font-bold rounded-lg relative z-10 transition">Daftar</button>
                 </div>
 
-                <!-- LOGIN FORM -->
-                <form x-show="authMode==='login'" @submit.prevent="login()" class="space-y-5" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4">
+                <form x-show="authMode==='login'" @submit.prevent="login()" class="space-y-5">
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><span class="text-slate-500 font-bold text-sm border-r border-slate-300 pr-3">+62</span></div>
-                        <input x-model="forms.login.phone" type="tel" class="w-full pl-20 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="812xxxxxxx" required>
+                        <input x-model="forms.login.phone" type="tel" class="w-full pl-20 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="812xxxxxxx" required>
                     </div>
                     <input x-model="forms.login.password" type="password" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Kata Sandi" required>
                     <button type="submit" :disabled="isLoading" class="w-full py-3.5 bg-primary text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition flex justify-center gap-2">
-                        <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                        <span>Masuk Sekarang</span>
+                        <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span><span>Masuk Sekarang</span>
                     </button>
                 </form>
 
-                <!-- REGISTER FORM -->
-                <form x-show="authMode==='register'" @submit.prevent="register()" class="space-y-5" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4">
+                <form x-show="authMode==='register'" @submit.prevent="register()" class="space-y-5">
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><span class="text-slate-500 font-bold text-sm border-r border-slate-300 pr-3">+62</span></div>
                         <input x-model="forms.register.phone" type="tel" class="w-full pl-20 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="812xxxxxxx" required>
@@ -330,16 +347,14 @@
                     <input x-model="forms.register.password" type="password" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Buat Kata Sandi" required>
                     <input x-model="forms.register.ref_code" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Kode Referral (Opsional)">
                     <button type="submit" :disabled="isLoading" class="w-full py-3.5 bg-primary text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition flex justify-center gap-2">
-                        <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                        <span>Daftar Akun</span>
+                        <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span><span>Daftar Akun</span>
                     </button>
                 </form>
             </div>
         </div>
     </template>
 
-    <!-- MAIN APP -->
-    <!-- Menggunakan max-w-lg (512px) untuk tampilan yang lebih lebar dan proporsional -->
+    <!-- MAIN APP CONTAINER (Max Width LG for Proportion) -->
     <div class="flex flex-col h-full w-full max-w-lg bg-white shadow-2xl relative" x-show="token && user">
         
         <!-- TOP BAR -->
@@ -359,12 +374,11 @@
             <div class="inline-block animate-marquee px-4 font-medium" x-text="settings.running_text"></div>
         </div>
 
-        <!-- CONTENT AREA -->
+        <!-- SCROLLABLE CONTENT -->
         <main class="flex-1 overflow-y-auto bg-slate-50 p-5 pb-28 relative">
             
-            <!-- HOME VIEW -->
+            <!-- HOME -->
             <div x-show="view==='home'" class="space-y-6 animate-fade-in">
-                <!-- Hero Card -->
                 <div class="bg-primary rounded-3xl p-6 text-white shadow-card relative overflow-hidden">
                     <div class="relative z-10">
                         <div class="flex justify-between items-start mb-4">
@@ -372,7 +386,7 @@
                                 <p class="text-slate-400 text-xs font-medium mb-1">Paket Aktif</p>
                                 <div class="inline-flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/10">
                                     <i class="fa-solid fa-crown text-gold text-xs"></i>
-                                    <span class="text-xs font-bold" x-text="plans.find(p => p.name === user?.plan_name)?.name || 'Trial Member'"></span>
+                                    <span class="text-xs font-bold" x-text="currentPlan?.name || 'Trial Member'"></span>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -388,7 +402,6 @@
                     <div class="absolute -bottom-6 -right-6 text-8xl text-white/5"><i class="fa-solid fa-wallet"></i></div>
                 </div>
 
-                <!-- Investment Style Menu -->
                 <div class="grid grid-cols-4 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                     <button @click="view='deposit'" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-circle-down"></i></div><span class="text-[10px] font-bold text-slate-600">Deposit</span></button>
                     <button @click="withdraw" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-circle-up"></i></div><span class="text-[10px] font-bold text-slate-600">Withdraw</span></button>
@@ -401,7 +414,7 @@
                 </div>
             </div>
 
-            <!-- JOBS VIEW -->
+            <!-- JOBS -->
             <div x-show="view==='jobs'" class="space-y-4">
                 <div class="flex justify-between items-center"><h2 class="font-bold text-lg text-slate-800">Misi Tersedia</h2><span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">Reset 00:00 WIB</span></div>
                 <template x-for="job in jobs" :key="job.id">
@@ -413,7 +426,7 @@
                         <div class="flex-1 py-1 flex flex-col justify-between">
                             <h3 class="font-bold text-sm line-clamp-2 leading-tight" x-text="job.title"></h3>
                             <div class="flex justify-between items-end">
-                                <div class="text-[10px] text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md"><i class="fa-regular fa-clock"></i> <span x-text="job.duration"></span> detik</div>
+                                <div class="text-[10px] text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md"><i class="fa-regular fa-clock"></i> <span x-text="job.duration"></span>s</div>
                                 <span x-show="!completedIds.includes(job.id)" class="text-primary text-xs font-bold bg-primary/10 px-3 py-1 rounded-full">Mulai</span>
                                 <span x-show="completedIds.includes(job.id)" class="text-emerald-600 text-xs font-bold">Selesai</span>
                             </div>
@@ -423,12 +436,66 @@
                 <div x-show="jobs.length===0" class="p-8 text-center text-slate-400 text-sm bg-white rounded-xl border border-dashed">Belum ada misi untuk level Anda.</div>
             </div>
 
-            <!-- PLANS VIEW -->
+            <!-- PLAYER VIEW (REVISI: Bukan Full Screen, Data Lengkap, Tombol Play) -->
+            <div x-show="view==='player'" class="space-y-5 animate-fade-in">
+                <!-- Video Container -->
+                <div class="bg-black rounded-2xl overflow-hidden shadow-xl relative aspect-video group">
+                    <div x-show="playerStatus === 'idle'" @click="playVideo" class="absolute inset-0 flex flex-col items-center justify-center bg-black/40 cursor-pointer z-10 hover:bg-black/30 transition">
+                        <div class="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mb-2 group-hover:scale-110 transition"><i class="fa-solid fa-play text-white text-2xl ml-1"></i></div>
+                        <p class="text-white font-bold text-sm">Ketuk untuk Memulai</p>
+                    </div>
+                    
+                    <div x-show="playerStatus !== 'idle'" class="w-full h-full">
+                        <iframe :src="playerStatus !== 'idle' ? 'https://www.youtube.com/embed/'+getYtId(activeJob?.youtube_url)+'?autoplay=1&controls=0&playsinline=1' : ''" class="w-full h-full pointer-events-none"></iframe>
+                    </div>
+
+                    <!-- Pause Overlay if blurred -->
+                    <div x-show="!isFocused && playerStatus === 'playing'" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-20">
+                        <i class="fa-solid fa-pause text-4xl mb-2 opacity-50"></i>
+                        <p class="font-bold">Video Dijeda</p>
+                        <p class="text-xs text-slate-400">Tetap di halaman ini.</p>
+                    </div>
+                </div>
+
+                <!-- Info & Stats -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                    <h1 class="font-bold text-lg text-slate-900 leading-tight mb-3" x-text="activeJob?.title"></h1>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Komisi Anda</p>
+                            <p class="text-emerald-600 font-bold text-lg" x-text="fmtMoney(currentPlan?.commission || 0)"></p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Sisa Waktu</p>
+                            <p class="text-slate-800 font-bold text-lg" :class="playerTimer > 0 ? 'text-amber-600' : 'text-emerald-600'" x-text="playerTimer > 0 ? playerTimer + ' Detik' : 'Selesai'"></p>
+                        </div>
+                    </div>
+
+                    <!-- Commission Details (Level Info) -->
+                    <div class="bg-blue-50 rounded-xl p-4 border border-blue-100 text-xs space-y-2 mb-5">
+                        <p class="font-bold text-blue-800 flex items-center gap-2"><i class="fa-solid fa-circle-info"></i> Detail Pembagian Komisi</p>
+                        <ul class="space-y-1 text-blue-700 ml-1">
+                            <li>• <strong>Member (Anda):</strong> <span x-text="fmtMoney(currentPlan?.commission || 0)"></span></li>
+                            <li>• <strong>Upline (Rabat):</strong> Sesuai level paket upline</li>
+                        </ul>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button @click="closePlayer" class="px-5 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50">Batal</button>
+                        <button :disabled="playerTimer > 0 || playerStatus !== 'done'" @click="claimReward" :class="(playerTimer > 0 || playerStatus !== 'done') ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-primary text-white hover:bg-slate-800 shadow-lg'" class="flex-1 py-3 rounded-xl text-sm font-bold transition">
+                            <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                            <span x-show="!isLoading" x-text="playerStatus === 'done' ? 'KLAIM HADIAH' : 'Tonton Sampai Selesai'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PLANS -->
             <div x-show="view==='plans'" class="space-y-4">
                 <h2 class="font-bold text-lg text-slate-800">Upgrade Membership</h2>
                 <template x-for="p in plans" :key="p.id">
                     <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative">
-                         <!-- Banner -->
                         <div class="h-28 bg-slate-800 relative">
                              <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60" onerror="this.style.display='none'">
                              <div class="absolute bottom-0 left-0 p-4"><h3 class="text-white font-bold text-xl" x-text="p.name"></h3></div>
@@ -449,7 +516,7 @@
                 </template>
             </div>
 
-            <!-- DEPOSIT VIEW -->
+            <!-- DEPOSIT -->
             <div x-show="view==='deposit'" class="space-y-4">
                 <div class="bg-white p-5 rounded-2xl shadow-sm border">
                     <h3 class="font-bold text-slate-800 mb-4">Isi Saldo</h3>
@@ -467,7 +534,7 @@
                 </div>
             </div>
 
-            <!-- HISTORY VIEW -->
+            <!-- HISTORY -->
             <div x-show="view==='history'" class="space-y-4">
                 <h2 class="font-bold text-lg text-slate-800">Riwayat Transaksi</h2>
                 <div class="space-y-3">
@@ -492,7 +559,7 @@
                 </div>
             </div>
 
-            <!-- REFERRAL TEAM VIEW -->
+            <!-- REFERRAL -->
             <div x-show="view==='referral'" class="space-y-4" x-data="{ lvl: 'l1' }">
                 <div class="bg-white p-5 rounded-2xl shadow-sm border text-center">
                     <p class="text-xs text-slate-400 font-bold uppercase mb-2">Kode Undangan</p>
@@ -500,7 +567,6 @@
                         <span x-text="user?.referral_code"></span><i class="fa-regular fa-copy text-slate-400"></i>
                     </div>
                 </div>
-
                 <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
                     <div class="flex border-b">
                         <button @click="lvl='l1'" :class="lvl==='l1'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 1</button>
@@ -525,7 +591,7 @@
                 </div>
             </div>
 
-            <!-- BANK BINDING VIEW -->
+            <!-- BANK BINDING (REVISI: Tidak dikunci ke nomor HP) -->
             <div x-show="view==='bank_binding'" class="space-y-4">
                 <div class="bg-white p-6 rounded-2xl shadow-sm border">
                     <div class="flex items-center gap-3 mb-6">
@@ -533,9 +599,20 @@
                          <h3 class="font-bold text-lg">Data Rekening</h3>
                     </div>
                     <div class="space-y-4">
-                        <div><label class="text-xs font-bold text-slate-400">Nama Bank</label><input x-model="forms.bank.bank_name" x-init="forms.bank.bank_name = bankInfo.bank_name || ''" class="w-full p-3 border rounded-xl mt-1 text-sm"></div>
-                        <div><label class="text-xs font-bold text-slate-400">Nomor Rekening</label><input x-model="forms.bank.account_number" x-init="forms.bank.account_number = bankInfo.account_number || ''" type="number" class="w-full p-3 border rounded-xl mt-1 text-sm"></div>
-                        <div><label class="text-xs font-bold text-slate-400">Atas Nama</label><input x-model="forms.bank.account_name" x-init="forms.bank.account_name = bankInfo.account_name || ''" class="w-full p-3 border rounded-xl mt-1 text-sm"></div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400">Nama Bank</label>
+                            <!-- x-init memastikan data terisi dari DB jika ada -->
+                            <input x-model="forms.bank.bank_name" x-init="forms.bank.bank_name = bankInfo.bank_name || ''" class="w-full p-3 border rounded-xl mt-1 text-sm font-medium" placeholder="Contoh: BCA">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400">Nomor Rekening</label>
+                            <!-- Input type number untuk validasi standar -->
+                            <input x-model="forms.bank.account_number" x-init="forms.bank.account_number = bankInfo.account_number || ''" type="number" class="w-full p-3 border rounded-xl mt-1 text-sm font-medium" placeholder="Nomor Rekening Anda">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400">Atas Nama</label>
+                            <input x-model="forms.bank.account_name" x-init="forms.bank.account_name = bankInfo.account_name || ''" class="w-full p-3 border rounded-xl mt-1 text-sm font-medium" placeholder="Nama Pemilik Rekening">
+                        </div>
                         <button @click="saveBank" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm shadow-lg">Simpan Rekening</button>
                     </div>
                 </div>
@@ -567,33 +644,6 @@
             </div>
 
         </main>
-
-        <!-- PLAYER OVERLAY -->
-        <div x-show="view==='player'" class="fixed inset-0 z-[80] bg-black flex flex-col">
-            <div class="h-16 flex items-center justify-between px-6 bg-gradient-to-b from-black/80 to-transparent absolute top-0 w-full z-10">
-                <button @click="closePlayer" class="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-4 py-2 rounded-full backdrop-blur">Keluar</button>
-                <div class="flex items-center gap-2 bg-red-600/90 border border-red-500 text-white px-3 py-1 rounded-full text-xs font-bold backdrop-blur">
-                    <div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    <span x-text="playerTimer>0 ? playerTimer+' Detik' : 'Selesai'"></span>
-                </div>
-            </div>
-            <div class="flex-1 flex items-center justify-center relative bg-black">
-                <iframe :src="activeJob ? 'https://www.youtube.com/embed/'+getYtId(activeJob.youtube_url)+'?autoplay=1&controls=0&playsinline=1' : ''" class="w-full aspect-video pointer-events-none"></iframe>
-                <div x-show="!isFocused" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-20">
-                    <i class="fa-solid fa-pause text-5xl mb-4 opacity-50"></i>
-                    <p class="font-bold">Video Dijeda</p>
-                    <p class="text-xs text-slate-400">Jangan tutup atau pindah tab.</p>
-                </div>
-            </div>
-            <div class="p-6 pb-10 bg-slate-900 rounded-t-3xl border-t border-white/10">
-                <h2 class="text-white font-bold mb-1 line-clamp-1" x-text="activeJob?.title"></h2>
-                <p class="text-slate-500 text-xs mb-6">Tonton sampai habis untuk klaim reward.</p>
-                <button :disabled="playerTimer>0" @click="claimReward" :class="playerTimer>0?'bg-slate-800 text-slate-600 cursor-not-allowed':'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'" class="w-full py-4 rounded-2xl font-bold text-lg transition-all transform active:scale-95">
-                    <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                    <span x-show="!isLoading" x-text="playerTimer>0 ? 'Tunggu Timer Habis...' : 'KLAIM HADIAH'"></span>
-                </button>
-            </div>
-        </div>
 
         <!-- BOTTOM NAV -->
         <nav class="bg-white border-t flex justify-around items-center h-20 shrink-0 z-40 pb-4" x-show="view!=='player'">
