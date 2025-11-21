@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Info & CS - WatchJob Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Summernote Dependencies -->
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+
+    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a', emerald: { 500: '#10b981', 600: '#059669' } }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>[x-cloak]{display:none} .note-editor { background: white; }</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="infoApp()" x-init="init()">
+
+    <!-- SIDEBAR (KONSISTEN) -->
+    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100"><span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span></div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
+            <a href="dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+            <a href="users.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-users w-5 text-center"></i> Data Users</a>
+            <a href="approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
+            <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
+            <a href="content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
+            <a href="info.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Info & CS</a>
+            <a href="settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center px-8">
+            <h2 class="text-lg font-bold text-slate-800">Manajemen Informasi & CS</h2>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- LEFT COL: CS MANAGEMENT -->
+            <div class="space-y-6">
+                <!-- Form Add CS -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-lg mb-4">Tambah Kontak CS</h3>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <select x-model="csForm.platform" class="w-full p-2 border rounded text-sm">
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="telegram">Telegram</option>
+                            </select>
+                            <select x-model="csForm.type" class="w-full p-2 border rounded text-sm">
+                                <option value="cs">Customer Service</option>
+                                <option value="group">Group</option>
+                                <option value="channel">Channel</option>
+                            </select>
+                        </div>
+                        <input x-model="csForm.name" class="w-full p-2 border rounded text-sm" placeholder="Nama (Contoh: Admin 1)">
+                        <input x-model="csForm.url" class="w-full p-2 border rounded text-sm" placeholder="Link (https://t.me/...)">
+                        <button @click="addCS" class="w-full py-2 bg-emerald-600 text-white rounded font-bold text-sm hover:bg-emerald-700">Simpan Kontak</button>
+                    </div>
+                </div>
+
+                <!-- List CS -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b font-bold text-sm">Daftar Kontak</div>
+                    <div class="divide-y">
+                        <template x-for="c in listCS" :key="c.id">
+                            <div class="p-4 flex justify-between items-center">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded flex items-center justify-center text-white" :class="c.platform==='whatsapp'?'bg-green-500':'bg-blue-500'">
+                                        <i class="fa-brands" :class="c.platform==='whatsapp'?'fa-whatsapp':'fa-telegram'"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-sm text-slate-800" x-text="c.name"></p>
+                                        <p class="text-[10px] text-slate-500 uppercase" x-text="c.type"></p>
+                                    </div>
+                                </div>
+                                <button @click="deleteCS(c.id)" class="text-red-500 hover:bg-red-50 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </template>
+                        <div x-show="listCS.length===0" class="p-4 text-center text-slate-400 text-sm">Belum ada kontak.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COL: INFO MANAGEMENT -->
+            <div class="space-y-6">
+                <!-- Form Info -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-lg mb-4">Buat Informasi Baru</h3>
+                    <div class="space-y-3">
+                        <input x-model="infoForm.title" class="w-full p-2 border rounded text-sm" placeholder="Judul Informasi">
+                        <!-- Summernote Container -->
+                        <div id="summernote"></div>
+                        <button @click="addInfo" class="w-full py-2 bg-primary text-white rounded font-bold text-sm hover:bg-slate-800">Publikasikan</button>
+                    </div>
+                </div>
+
+                <!-- List Info -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b font-bold text-sm">Arsip Informasi</div>
+                    <div class="divide-y">
+                        <template x-for="i in listInfo" :key="i.id">
+                            <div class="p-4 flex justify-between items-center">
+                                <div>
+                                    <p class="font-bold text-sm text-slate-800 line-clamp-1" x-text="i.title"></p>
+                                    <p class="text-[10px] text-slate-400" x-text="new Date(i.created_at).toLocaleDateString()"></p>
+                                </div>
+                                <button @click="deleteInfo(i.id)" class="text-red-500 hover:bg-red-50 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </template>
+                        <div x-show="listInfo.length===0" class="p-4 text-center text-slate-400 text-sm">Belum ada informasi.</div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        function infoApp() {
+            return {
+                csForm: { platform: 'whatsapp', type: 'cs', name: '', url: '' },
+                infoForm: { title: '', content: '' },
+                listCS: [],
+                listInfo: [],
+                
+                async init() {
+                    if(!localStorage.getItem('token')) return window.location.href='/index.html';
+                    
+                    // Init Summernote
+                    $('#summernote').summernote({
+                        placeholder: 'Tulis konten informasi di sini...',
+                        tabsize: 2,
+                        height: 200,
+                        toolbar: [
+                          ['style', ['style']],
+                          ['font', ['bold', 'underline', 'clear']],
+                          ['color', ['color']],
+                          ['para', ['ul', 'ol', 'paragraph']],
+                          ['table', ['table']],
+                          ['insert', ['link']],
+                          ['view', ['codeview', 'help']]
+                        ]
+                    });
+
+                    await this.loadData();
+                },
+
+                async loadData() {
+                    const [cs, inf] = await Promise.all([
+                        fetch('/api/admin?type=cs', { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} }),
+                        fetch('/api/admin?type=info', { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} })
+                    ]);
+                    this.listCS = await cs.json();
+                    this.listInfo = await inf.json();
+                },
+
+                async addCS() {
+                    if(!this.csForm.name || !this.csForm.url) return alert('Lengkapi data');
+                    await fetch('/api/admin', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'create_cs', ...this.csForm })
+                    });
+                    this.csForm.name = ''; this.csForm.url = '';
+                    this.loadData();
+                },
+
+                async deleteCS(id) {
+                    if(!confirm('Hapus kontak ini?')) return;
+                    await fetch('/api/admin', {
+                        method: 'POST', headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'delete_cs', id })
+                    });
+                    this.loadData();
+                },
+
+                async addInfo() {
+                    const content = $('#summernote').summernote('code');
+                    if(!this.infoForm.title || !content) return alert('Judul dan konten wajib diisi');
+                    
+                    await fetch('/api/admin', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'create_info', title: this.infoForm.title, content })
+                    });
+                    
+                    this.infoForm.title = '';
+                    $('#summernote').summernote('code', '');
+                    alert('Informasi dipublikasikan');
+                    this.loadData();
+                },
+
+                async deleteInfo(id) {
+                    if(!confirm('Hapus informasi ini?')) return;
+                    await fetch('/api/admin', {
+                        method: 'POST', headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'delete_info', id })
+                    });
+                    this.loadData();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
