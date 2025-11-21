@@ -28,6 +28,9 @@ export async function onRequestGet(context) {
       WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
     `).bind(id).first();
 
+    // Tambah 7 jam manual agar tanggalnya berganti pas jam 00.00 WIB.
+    let now = new Date();
+    now.setHours(now.getHours() + 7);
     const todayStart = new Date().toISOString().split('T')[0] + ' 00:00:00';
     
     // Ambil Statistik Hari Ini
