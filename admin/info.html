@@ -13,76 +13,130 @@
     <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
 
-    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a', emerald: { 500: '#10b981', 600: '#059669' } }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script>
+        tailwind.config = { 
+            theme: { 
+                extend: { 
+                    colors: { 
+                        primary: '#0f172a', 
+                        emerald: { 500: '#10b981', 600: '#059669' },
+                        danger: '#ef4444' 
+                    }, 
+                    fontFamily: { sans: ['Inter', 'sans-serif'] } 
+                } 
+            } 
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
-    <style>[x-cloak]{display:none} .note-editor { background: white; }</style>
+    <style>
+        [x-cloak] { display: none !important; }
+        .note-editor { background: white; border-radius: 0.5rem; border-color: #e2e8f0; }
+        .note-toolbar { border-radius: 0.5rem 0.5rem 0 0; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="infoApp()" x-init="init()">
 
-    <!-- SIDEBAR (KONSISTEN) -->
-    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
-        <div class="h-16 flex items-center px-6 border-b border-slate-100"><span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span></div>
+    <!-- TOAST NOTIFICATION -->
+    <div class="fixed top-5 right-5 z-[60] transition-all duration-300" x-show="toast.show" x-transition x-cloak>
+        <div :class="toast.type==='error'?'bg-red-600':'bg-emerald-600'" class="text-white px-6 py-3 rounded-xl shadow-xl font-bold flex items-center gap-3">
+            <i class="fa-solid" :class="toast.type==='error'?'fa-triangle-exclamation':'fa-circle-check'"></i>
+            <span x-text="toast.msg"></span>
+        </div>
+    </div>
+
+    <!-- MOBILE OVERLAY -->
+    <div class="fixed inset-0 bg-black/50 z-30 md:hidden" x-show="sidebarOpen" @click="sidebarOpen=false" x-transition x-cloak></div>
+
+    <!-- SIDEBAR -->
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed md:static inset-y-0 left-0 w-64 bg-white border-r border-slate-200 z-40 transition-transform duration-300 md:translate-x-0 flex flex-col shadow-2xl md:shadow-none">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100">
+            <span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span>
+        </div>
         <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
             <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
             <a href="dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
             <a href="users.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-users w-5 text-center"></i> Data Users</a>
             <a href="approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
+            
             <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
             <a href="content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
             <a href="info.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Info & CS</a>
             <a href="settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
         </nav>
+        <div class="p-4 border-t border-slate-100"><button @click="logout" class="w-full py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-50 transition">Keluar</button></div>
     </aside>
 
+    <!-- CONTENT -->
     <div class="flex-1 flex flex-col overflow-hidden">
-        <header class="h-16 bg-white border-b border-slate-200 flex items-center px-8">
-            <h2 class="text-lg font-bold text-slate-800">Manajemen Informasi & CS</h2>
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8">
+            <div class="flex items-center gap-4">
+                <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-slate-600 text-xl"><i class="fa-solid fa-bars"></i></button>
+                <h2 class="text-lg font-bold text-slate-800">Manajemen Informasi & CS</h2>
+            </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             <!-- LEFT COL: CS MANAGEMENT -->
             <div class="space-y-6">
                 <!-- Form Add CS -->
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h3 class="font-bold text-lg mb-4">Tambah Kontak CS</h3>
+                    <div class="flex items-center gap-3 mb-4 border-b pb-2">
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-headset"></i></div>
+                        <h3 class="font-bold text-lg text-slate-800">Tambah Kontak CS</h3>
+                    </div>
                     <div class="space-y-3">
                         <div class="grid grid-cols-2 gap-3">
-                            <select x-model="csForm.platform" class="w-full p-2 border rounded text-sm">
-                                <option value="whatsapp">WhatsApp</option>
-                                <option value="telegram">Telegram</option>
-                            </select>
-                            <select x-model="csForm.type" class="w-full p-2 border rounded text-sm">
-                                <option value="cs">Customer Service</option>
-                                <option value="group">Group</option>
-                                <option value="channel">Channel</option>
-                            </select>
+                            <div>
+                                <label class="text-xs font-bold text-slate-400 block mb-1">Platform</label>
+                                <select x-model="csForm.platform" class="w-full p-2.5 border rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-primary transition">
+                                    <option value="whatsapp">WhatsApp</option>
+                                    <option value="telegram">Telegram</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-slate-400 block mb-1">Tipe</label>
+                                <select x-model="csForm.type" class="w-full p-2.5 border rounded-xl text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-primary transition">
+                                    <option value="cs">Customer Service</option>
+                                    <option value="group">Group Chat</option>
+                                    <option value="channel">Channel Info</option>
+                                </select>
+                            </div>
                         </div>
-                        <input x-model="csForm.name" class="w-full p-2 border rounded text-sm" placeholder="Nama (Contoh: Admin 1)">
-                        <input x-model="csForm.url" class="w-full p-2 border rounded text-sm" placeholder="Link (https://t.me/...)">
-                        <button @click="addCS" class="w-full py-2 bg-emerald-600 text-white rounded font-bold text-sm hover:bg-emerald-700">Simpan Kontak</button>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Nama Tampilan</label>
+                            <input x-model="csForm.name" class="w-full p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary transition" placeholder="Contoh: Admin Support 1">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Link URL (https://...)</label>
+                            <input x-model="csForm.url" class="w-full p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary transition" placeholder="https://wa.me/628...">
+                        </div>
+                        <button @click="addCS" class="w-full py-2.5 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Kontak</button>
                     </div>
                 </div>
 
                 <!-- List CS -->
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div class="p-4 bg-slate-50 border-b font-bold text-sm">Daftar Kontak</div>
-                    <div class="divide-y">
+                    <div class="p-4 bg-slate-50 border-b font-bold text-sm text-slate-600 uppercase tracking-wider">Daftar Kontak Aktif</div>
+                    <div class="divide-y divide-slate-100">
                         <template x-for="c in listCS" :key="c.id">
-                            <div class="p-4 flex justify-between items-center">
+                            <div class="p-4 flex justify-between items-center hover:bg-slate-50/50 transition">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded flex items-center justify-center text-white" :class="c.platform==='whatsapp'?'bg-green-500':'bg-blue-500'">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-lg shadow-sm" :class="c.platform==='whatsapp'?'bg-gradient-to-br from-green-400 to-green-600':'bg-gradient-to-br from-blue-400 to-blue-600'">
                                         <i class="fa-brands" :class="c.platform==='whatsapp'?'fa-whatsapp':'fa-telegram'"></i>
                                     </div>
                                     <div>
                                         <p class="font-bold text-sm text-slate-800" x-text="c.name"></p>
-                                        <p class="text-[10px] text-slate-500 uppercase" x-text="c.type"></p>
+                                        <div class="flex gap-2 mt-0.5">
+                                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 rounded text-slate-500 font-bold uppercase border" x-text="c.platform"></span>
+                                            <span class="text-[10px] px-2 py-0.5 bg-slate-100 rounded text-slate-500 font-bold uppercase border" x-text="c.type"></span>
+                                        </div>
                                     </div>
                                 </div>
-                                <button @click="deleteCS(c.id)" class="text-red-500 hover:bg-red-50 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
+                                <button @click="deleteCS(c.id)" class="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 flex items-center justify-center transition"><i class="fa-solid fa-trash-can"></i></button>
                             </div>
                         </template>
-                        <div x-show="listCS.length===0" class="p-4 text-center text-slate-400 text-sm">Belum ada kontak.</div>
+                        <div x-show="listCS.length===0" class="p-8 text-center text-slate-400 text-sm border-2 border-dashed border-slate-100 m-4 rounded-xl">Belum ada kontak yang ditambahkan.</div>
                     </div>
                 </div>
             </div>
@@ -91,29 +145,38 @@
             <div class="space-y-6">
                 <!-- Form Info -->
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h3 class="font-bold text-lg mb-4">Buat Informasi Baru</h3>
-                    <div class="space-y-3">
-                        <input x-model="infoForm.title" class="w-full p-2 border rounded text-sm" placeholder="Judul Informasi">
+                    <div class="flex items-center gap-3 mb-4 border-b pb-2">
+                        <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fa-solid fa-bullhorn"></i></div>
+                        <h3 class="font-bold text-lg text-slate-800">Buat Informasi Baru</h3>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Judul Informasi</label>
+                            <input x-model="infoForm.title" class="w-full p-3 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary transition" placeholder="Tulis judul yang menarik...">
+                        </div>
                         <!-- Summernote Container -->
-                        <div id="summernote"></div>
-                        <button @click="addInfo" class="w-full py-2 bg-primary text-white rounded font-bold text-sm hover:bg-slate-800">Publikasikan</button>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Konten Artikel</label>
+                            <div id="summernote"></div>
+                        </div>
+                        <button @click="addInfo" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg transition">Publikasikan Informasi</button>
                     </div>
                 </div>
 
                 <!-- List Info -->
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div class="p-4 bg-slate-50 border-b font-bold text-sm">Arsip Informasi</div>
-                    <div class="divide-y">
+                    <div class="p-4 bg-slate-50 border-b font-bold text-sm text-slate-600 uppercase tracking-wider">Arsip Informasi</div>
+                    <div class="divide-y divide-slate-100">
                         <template x-for="i in listInfo" :key="i.id">
-                            <div class="p-4 flex justify-between items-center">
+                            <div class="p-4 flex justify-between items-start hover:bg-slate-50/50 transition">
                                 <div>
-                                    <p class="font-bold text-sm text-slate-800 line-clamp-1" x-text="i.title"></p>
-                                    <p class="text-[10px] text-slate-400" x-text="new Date(i.created_at).toLocaleDateString()"></p>
+                                    <p class="font-bold text-sm text-slate-800 line-clamp-1 mb-1" x-text="i.title"></p>
+                                    <p class="text-[10px] text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> <span x-text="new Date(i.created_at).toLocaleString()"></span></p>
                                 </div>
-                                <button @click="deleteInfo(i.id)" class="text-red-500 hover:bg-red-50 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
+                                <button @click="deleteInfo(i.id)" class="w-8 h-8 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 flex items-center justify-center transition shrink-0 ml-2"><i class="fa-solid fa-trash-can"></i></button>
                             </div>
                         </template>
-                        <div x-show="listInfo.length===0" class="p-4 text-center text-slate-400 text-sm">Belum ada informasi.</div>
+                        <div x-show="listInfo.length===0" class="p-8 text-center text-slate-400 text-sm border-2 border-dashed border-slate-100 m-4 rounded-xl">Belum ada informasi yang dipublikasikan.</div>
                     </div>
                 </div>
             </div>
@@ -124,17 +187,24 @@
     <script>
         function infoApp() {
             return {
+                sidebarOpen: false,
+                toast: { show: false, msg: '', type: 'success' },
+                token: localStorage.getItem('token'),
+                
                 csForm: { platform: 'whatsapp', type: 'cs', name: '', url: '' },
                 infoForm: { title: '', content: '' },
                 listCS: [],
                 listInfo: [],
                 
                 async init() {
-                    if(!localStorage.getItem('token')) return window.location.href='/index.html';
+                    if(!this.token) {
+                        window.location.href = '/index.html';
+                        return;
+                    }
                     
-                    // Init Summernote
+                    // Init Summernote with Custom Toolbar
                     $('#summernote').summernote({
-                        placeholder: 'Tulis konten informasi di sini...',
+                        placeholder: 'Tulis konten informasi lengkap di sini...',
                         tabsize: 2,
                         height: 200,
                         toolbar: [
@@ -142,67 +212,122 @@
                           ['font', ['bold', 'underline', 'clear']],
                           ['color', ['color']],
                           ['para', ['ul', 'ol', 'paragraph']],
-                          ['table', ['table']],
                           ['insert', ['link']],
-                          ['view', ['codeview', 'help']]
-                        ]
+                          ['view', ['codeview']]
+                        ],
+                        callbacks: {
+                            onChange: (contents) => {
+                                this.infoForm.content = contents;
+                            }
+                        }
                     });
 
                     await this.loadData();
                 },
 
+                // --- API ACTIONS ---
+                
+                async api(body) {
+                    try {
+                        const res = await fetch('/api/admin', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json', 
+                                'Authorization': `Bearer ${this.token}`
+                            },
+                            body: JSON.stringify(body)
+                        });
+
+                        if (res.status === 401) this.logout();
+                        
+                        const json = await res.json();
+                        if (!res.ok) throw new Error(json.error);
+                        return json;
+                    } catch (e) {
+                        this.showToast(e.message, 'error');
+                        throw e;
+                    }
+                },
+
                 async loadData() {
-                    const [cs, inf] = await Promise.all([
-                        fetch('/api/admin?type=cs', { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} }),
-                        fetch('/api/admin?type=info', { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} })
-                    ]);
-                    this.listCS = await cs.json();
-                    this.listInfo = await inf.json();
+                    try {
+                        const [csRes, infoRes] = await Promise.all([
+                            fetch('/api/admin?type=cs', { headers: {'Authorization': `Bearer ${this.token}`} }),
+                            fetch('/api/admin?type=info', { headers: {'Authorization': `Bearer ${this.token}`} })
+                        ]);
+
+                        if (csRes.status === 401 || infoRes.status === 401) this.logout();
+
+                        const csJson = await csRes.json();
+                        const infoJson = await infoRes.json();
+
+                        // Handle potential error responses from GET
+                        if(csJson.error) throw new Error(csJson.error);
+                        
+                        this.listCS = csJson;
+                        this.listInfo = infoJson;
+                    } catch (e) {
+                        console.error(e);
+                        this.showToast('Gagal memuat data', 'error');
+                    }
                 },
 
                 async addCS() {
-                    if(!this.csForm.name || !this.csForm.url) return alert('Lengkapi data');
-                    await fetch('/api/admin', {
-                        method: 'POST',
-                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
-                        body: JSON.stringify({ action: 'create_cs', ...this.csForm })
-                    });
-                    this.csForm.name = ''; this.csForm.url = '';
-                    this.loadData();
+                    if (!this.csForm.name || !this.csForm.url) return this.showToast('Nama dan URL wajib diisi', 'error');
+                    
+                    try {
+                        await this.api({ action: 'create_cs', ...this.csForm });
+                        this.showToast('Kontak berhasil ditambahkan');
+                        this.csForm.name = ''; 
+                        this.csForm.url = '';
+                        this.loadData();
+                    } catch(e) {}
                 },
 
                 async deleteCS(id) {
-                    if(!confirm('Hapus kontak ini?')) return;
-                    await fetch('/api/admin', {
-                        method: 'POST', headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
-                        body: JSON.stringify({ action: 'delete_cs', id })
-                    });
-                    this.loadData();
+                    if (!confirm('Hapus kontak ini?')) return;
+                    try {
+                        await this.api({ action: 'delete_cs', id });
+                        this.showToast('Kontak dihapus');
+                        this.loadData();
+                    } catch(e) {}
                 },
 
                 async addInfo() {
+                    // Get code directly from summernote just in case
                     const content = $('#summernote').summernote('code');
-                    if(!this.infoForm.title || !content) return alert('Judul dan konten wajib diisi');
                     
-                    await fetch('/api/admin', {
-                        method: 'POST',
-                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
-                        body: JSON.stringify({ action: 'create_info', title: this.infoForm.title, content })
-                    });
+                    if (!this.infoForm.title || !content || content === '<p><br></p>') {
+                        return this.showToast('Judul dan konten wajib diisi', 'error');
+                    }
                     
-                    this.infoForm.title = '';
-                    $('#summernote').summernote('code', '');
-                    alert('Informasi dipublikasikan');
-                    this.loadData();
+                    try {
+                        await this.api({ action: 'create_info', title: this.infoForm.title, content });
+                        this.showToast('Informasi berhasil dipublikasikan');
+                        
+                        this.infoForm.title = '';
+                        $('#summernote').summernote('reset');
+                        this.loadData();
+                    } catch(e) {}
                 },
 
                 async deleteInfo(id) {
-                    if(!confirm('Hapus informasi ini?')) return;
-                    await fetch('/api/admin', {
-                        method: 'POST', headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
-                        body: JSON.stringify({ action: 'delete_info', id })
-                    });
-                    this.loadData();
+                    if (!confirm('Hapus informasi ini secara permanen?')) return;
+                    try {
+                        await this.api({ action: 'delete_info', id });
+                        this.showToast('Informasi dihapus');
+                        this.loadData();
+                    } catch(e) {}
+                },
+
+                logout() { 
+                    localStorage.clear(); 
+                    window.location.href = '/index.html'; 
+                },
+
+                showToast(msg, type='success') {
+                    this.toast = { show: true, msg, type };
+                    setTimeout(() => this.toast.show = false, 3000);
                 }
             }
         }
