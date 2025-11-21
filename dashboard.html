@@ -18,13 +18,14 @@
     <!-- HEADER -->
     <header class="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 z-20">
         <div class="flex items-center gap-3">
-            <!-- AVATAR REVISI: ICON PEOPLE -->
+            <!-- AVATAR ICON PEOPLE -->
             <div class="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-sm border border-slate-200">
                 <i class="fa-solid fa-user"></i>
             </div>
             <div>
                 <p class="text-[10px] font-bold text-slate-400 uppercase">Total Saldo</p>
-                <p class="font-bold text-base text-slate-800" x-text="fmtMoney(user?.balance)"></p>
+                <!-- Saldo dibaca dari user state yang dijamin update dari fetchData -->
+                <p class="font-bold text-base text-slate-800" x-text="fmtMoney(user?.balance || 0)"></p>
             </div>
         </div>
         <button @click="logout" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-power-off"></i></button>
@@ -104,13 +105,20 @@
                         if(!res.ok) { localStorage.clear(); window.location.href = 'index.html'; return; }
                         const data = await res.json();
                         
-                        this.user = data.user;
+                        // KRITIS: Perbarui state user dengan data baru, termasuk balance.
+                        // Objek this.user akan dipantau oleh AlpineJS untuk mengupdate UI.
+                        this.user = data.user; 
+                        
                         this.planName = data.plan?.name || 'Trial Member';
                         this.todayIncome = data.user.today_income;
                         this.tasksDone = data.user.tasks_done;
                         this.running_text = data.running_text;
+                        
+                        // Perbarui localStorage dengan data terbaru dari server
                         localStorage.setItem('user', JSON.stringify(this.user));
-                    } catch(e){}
+                    } catch(e){
+                         console.error("Error fetching dashboard data:", e);
+                    }
                 },
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 logout() { localStorage.clear(); window.location.href = 'index.html'; }
