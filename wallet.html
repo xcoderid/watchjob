@@ -61,7 +61,14 @@
         <!-- Withdraw Form -->
         <div x-show="tab==='wd'" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
             <h3 class="font-bold text-slate-800 mb-4">Tarik Saldo</h3>
-            <div class="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg mb-4 border border-blue-100">Pastikan data bank sudah diisi di menu Profil.</div>
+            
+            <!-- Tampilan Data Bank (Jika Ada) -->
+            <div x-show="bankInfo && bankInfo.account_number" class="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg mb-4 border border-blue-100">
+                <p class="font-bold mb-1">Rekening Tujuan:</p>
+                <p x-text="bankInfo.bank_name + ' - ' + bankInfo.account_number"></p>
+                <p x-text="bankInfo.account_name"></p>
+            </div>
+
             <div class="space-y-4">
                 <div><label class="text-xs font-bold text-slate-400">Jumlah (Min 50.000)</label><input x-model="wd.amount" type="number" class="w-full p-3 border rounded-xl mt-1 font-bold" placeholder="50000"></div>
                 <button @click="submitWd" :disabled="loading" class="w-full py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg">Tarik Uang</button>
@@ -82,21 +89,18 @@
         function walletApp() {
             return {
                 tab: 'depo',
-                // Mengambil user dari localStorage/sessionStorage yang ada (state yang working saat ini)
-                user: JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}'), 
+                user: JSON.parse(sessionStorage.getItem('user') || '{}'), 
+                bankInfo: null, // Menyimpan data bank
                 depo: { amount: '', method: 'Bank Transfer' },
                 wd: { amount: '' },
                 loading: false,
                 modal: { show: false, message: '' },
                 
                 async init() {
-                    // Cek Sesi
-                    if(!localStorage.getItem('token') && !sessionStorage.getItem('token')) return this.logout();
-                    
+                    if(!sessionStorage.getItem('token')) return this.logout();
                     const urlParams = new URLSearchParams(window.location.search);
                     if(urlParams.get('tab')) this.tab = urlParams.get('tab');
                     
-                    // KRITIS: Panggil fetchUser saat inisialisasi untuk mendapatkan saldo terbaru dari server
                     await this.fetchUser();
                 },
 
@@ -105,34 +109,21 @@
                     if (!userId) return this.logout();
 
                     try {
-                        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-                        
-                        // Fetch data user terbaru dari database
+                        const token = sessionStorage.getItem('token');
                         const res = await fetch(`/api/users?id=${userId}`, { 
                             headers: { 'Authorization': `Bearer ${token}` } 
                         });
                         
                         if(res.ok) {
                             const data = await res.json();
-                            
-                            const updatedUser = data.user;
-
-                            // 2. KRITIS: Update state AlpineJS (Saldo akan ter-render)
-                            this.user = updatedUser;
-
-                            // 3. Update storage (untuk sinkronisasi di halaman lain)
-                            if (localStorage.getItem('token')) {
-                                localStorage.setItem('user', JSON.stringify(updatedUser)); 
-                            } else if (sessionStorage.getItem('token')) {
-                                sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
-                            }
-                            
+                            this.user = data.user;
+                            this.bankInfo = data.bank_info; // Simpan info bank untuk validasi
+                            sessionStorage.setItem('user', JSON.stringify(this.user)); 
                         } else if (res.status === 401) {
                             this.logout();
                         }
                     } catch(e) { 
-                        console.error("Error fetching user data:", e); 
-                        this.showModal(`Gagal memuat saldo: ${e.message}`);
+                        this.showModal(`Gagal memuat data: ${e.message}`);
                     }
                 },
                 
@@ -142,7 +133,7 @@
                 },
 
                 async api(body) {
-                    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                    const token = sessionStorage.getItem('token');
                     const res = await fetch('/api/transactions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -160,23 +151,26 @@
                         await this.api({ type: 'deposit', ...this.depo });
                         this.showModal('Deposit diajukan! Cek riwayat.');
                         this.depo.amount = '';
-                        // KRITIS: Refresh saldo setelah transaksi berhasil diajukan
-                        await this.fetchUser(); 
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
                 },
 
                 async submitWd() {
+                    // Cek apakah data bank sudah ada
+                    if (!this.bankInfo || !this.bankInfo.account_number) {
+                        this.showModal('Silahkan ikat akun bank anda di profile!');
+                        // Opsional: redirect ke halaman profile bank setelah delay
+                        setTimeout(() => { window.location.href = 'bank.html'; }, 2000);
+                        return;
+                    }
+
                     if(this.wd.amount < 50000) return this.showModal('Minimal penarikan Rp 50.000.');
+                    
                     this.loading = true;
                     try {
-                        // Backend handles balance check and bank info check
                         await this.api({ type: 'withdrawal', amount: this.wd.amount });
-                        
                         this.showModal('Penarikan diproses! Cek riwayat.');
                         this.wd.amount = '';
-                        
-                        // KRITIS: Refresh saldo setelah WD (WD mengurangi saldo instan dengan status pending)
                         await this.fetchUser(); 
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
@@ -185,7 +179,6 @@
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 
                 logout() { 
-                    localStorage.clear(); 
                     sessionStorage.clear(); 
                     window.location.href = 'index.html'; 
                 }
