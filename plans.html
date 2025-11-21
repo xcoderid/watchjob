@@ -154,19 +154,34 @@
                 isLoading: false,
                 modal: { show: false, title: '', message: '', type: 'info', callback: null },
                 selectedPlan: null,
+                userBalance: 0, // State untuk menyimpan saldo user terbaru
 
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
-                    this.fetchPlans();
+                    this.fetchData(); // Menggabungkan fetch plan dan fetch user
                 },
-
-                async fetchPlans() {
+                
+                async fetchData() {
                     this.isLoading = true;
                     try {
-                        const res = await fetch('/api/plans', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-                        this.plans = await res.json();
+                        const token = localStorage.getItem('token');
+                        const user = JSON.parse(localStorage.getItem('user'));
+
+                        // 1. Ambil data user terbaru (WAJIB untuk saldo)
+                        const userRes = await fetch(`/api/users?id=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                        const userData = await userRes.json();
+                        
+                        // Perbarui saldo lokal dan localStorage agar sinkron
+                        this.userBalance = userData.user.balance;
+                        localStorage.setItem('user', JSON.stringify(userData.user));
+                        
+                        // 2. Ambil daftar plans
+                        const plansRes = await fetch('/api/plans', { headers: { 'Authorization': `Bearer ${token}` } });
+                        this.plans = await plansRes.json();
+                        
                     } catch(e) {
                         console.error(e);
+                        this.showModal('error', 'Gagal Memuat Data', 'Gagal memuat saldo atau daftar paket. Silakan coba lagi.');
                     } finally {
                         this.isLoading = false;
                     }
@@ -174,6 +189,12 @@
 
                 // 1. Tampilkan Modal Konfirmasi
                 confirmBuy(p) {
+                    // Cek Saldo sebelum menampilkan modal konfirmasi
+                    if (this.userBalance < p.price) {
+                         this.showModal('error', 'Saldo Tidak Cukup', `Saldo Anda (${this.fmtMoney(this.userBalance)}) tidak mencukupi untuk membeli paket ${p.name} seharga ${this.fmtMoney(p.price)}.`);
+                         return;
+                    }
+                    
                     this.selectedPlan = p;
                     this.modal = {
                         show: true,
@@ -186,8 +207,8 @@
 
                 // 2. Eksekusi Pembelian saat tombol "Ya" diklik
                 async processBuy() {
-                    this.modal.show = false; // Tutup modal konfirmasi
-                    this.isLoading = true;   // Tampilkan loading
+                    this.modal.show = false;
+                    this.isLoading = true;
                     
                     try {
                         const res = await fetch('/api/plans', {
@@ -200,13 +221,12 @@
                         
                         if(!res.ok) throw new Error(json.error);
                         
-                        // Tampilkan Modal Sukses
+                        // Setelah sukses, tampilkan Modal Sukses dan redirect
                         this.showModal('success', 'Pembelian Berhasil!', json.message, () => {
                             window.location.href = 'dashboard.html';
                         });
 
                     } catch(e) {
-                        // Tampilkan Modal Error
                         this.showModal('error', 'Gagal Membeli', e.message);
                     } finally {
                         this.isLoading = false;
@@ -221,9 +241,9 @@
                 // Handler tombol di dalam modal
                 handleConfirm() {
                     if (this.modal.callback) {
-                        this.modal.callback.call(this); // Execute callback
+                        this.modal.callback.call(this); 
                     } else {
-                        this.modal.show = false; // Just close
+                        this.modal.show = false;
                     }
                 },
 
