@@ -403,11 +403,12 @@
                         rabat_percent: parseFloat(this.planForm.rabat_percent) || 0,
                         
                         // Action specific
-                        action: 'create_plan',
+                        action: this.editModal.isEditing ? 'update_plan' : 'create_plan',
+                        id: this.editModal.isEditing ? this.editModal.originalPlanId : null
                     };
 
                     await this.api(payload);
-                    this.showToast('Paket Membership Berhasil Dibuat', 'success');
+                    this.showToast('Paket Membership Berhasil ' + (this.editModal.isEditing ? 'Diperbarui' : 'Dibuat'), 'success');
                     this.resetPlanForm();
                     this.fetchData(); // Refresh daftar plans
                 },
