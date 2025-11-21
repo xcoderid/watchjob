@@ -6,96 +6,103 @@
     <title>WatchJob Enterprise</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     
-    <!-- Configuration -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: { 
-                        primary: { DEFAULT: '#0f172a', light: '#1e293b' }, 
+                        primary: { DEFAULT: '#1e293b', light: '#334155' }, 
+                        gold: { DEFAULT: '#f59e0b', light: '#fbbf24' },
                         accent: { DEFAULT: '#3b82f6', hover: '#2563eb' },
                     },
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-                    animation: { 'marquee': 'marquee 25s linear infinite' },
-                    keyframes: { marquee: { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(-100%)' } } }
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    boxShadow: { 'card': '0 4px 20px -2px rgba(0, 0, 0, 0.05)' }
                 }
             }
         }
     </script>
 
-    <!-- AlpineJS Logic -->
     <script>
         function appData() {
             return {
-                // State
+                // --- STATE ---
                 authMode: 'login',
                 view: 'home',
                 token: localStorage.getItem('token'),
                 user: JSON.parse(localStorage.getItem('user') || 'null'),
                 isLoading: false,
-                toast: { visible: false, message: '', type: 'info' },
+                
+                // Custom Modal State
+                modal: { visible: false, title: '', message: '', onConfirm: null, type: 'info' }, // type: info, confirm
 
-                // Data Storage
+                // Data
                 dashboard: { income: 0, tasks_done: 0 },
                 jobs: [],
                 plans: [],
                 transactions: [],
+                referrals: { l1: [], l2: [], l3: [] },
                 settings: { running_text: '' },
                 completedIds: [],
-
+                
+                // Bank Data
+                bankInfo: { bank_name: '', account_number: '', account_name: '' },
+                
                 // Forms
                 forms: {
-                    login: { username: '', password: '' },
-                    register: { username: '', email: '', password: '', ref_code: '' },
+                    login: { phone: '', password: '' },
+                    register: { phone: '', password: '', ref_code: '' },
                     deposit: { amount: '', method: 'Bank Transfer' },
-                    withdraw: { amount: '', account: '' },
-                    walletTab: 'depo'
+                    withdraw: { amount: '' },
+                    pass: { old: '', new: '' },
+                    bank: { bank_name: '', account_number: '', account_name: '' }
                 },
-
+                
                 // Player
                 activeJob: null,
                 playerTimer: 0,
                 playerInterval: null,
                 isFocused: true,
 
+                // --- INIT ---
                 async init() {
                     if (this.token) await this.refreshData();
-                    document.addEventListener("visibilitychange", () => { this.isFocused = !document.hidden; });
+                    document.addEventListener("visibilitychange", () => { 
+                        this.isFocused = !document.hidden; 
+                    });
                 },
 
-                // --- CORE API ---
+                // --- CUSTOM MODAL ---
+                confirmAction(title, message, callback) {
+                    this.modal = { visible: true, title, message, onConfirm: callback, type: 'confirm' };
+                },
+                showAlert(title, message) {
+                    this.modal = { visible: true, title, message, onConfirm: () => { this.modal.visible = false }, type: 'info' };
+                },
+
+                // --- API WRAPPER ---
                 async api(endpoint, method = 'GET', body = null) {
                     const headers = { 'Content-Type': 'application/json' };
                     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-                    
                     try {
                         const res = await fetch(`/api${endpoint}`, { method, headers, body: body ? JSON.stringify(body) : null });
                         const json = await res.json();
                         if (!res.ok) {
-                            // Auto logout jika token expired atau unauthorized (401/403)
                             if (res.status === 401 || res.status === 403) this.logout();
-                            throw new Error(json.error || 'Terjadi kesalahan server');
+                            throw new Error(json.error || 'Kesalahan Server');
                         }
                         return json;
                     } catch (e) {
-                        this.showToast(e.message, 'error');
+                        this.showAlert('Error', e.message);
                         throw e;
                     }
                 },
 
                 // --- DATA SYNC ---
                 async refreshData() {
-                    if(!this.user) return;
-                    
-                    // Jika Admin, redirect ke admin.html (jangan load data user di sini)
-                    if(this.user.role === 'admin') {
-                        window.location.href = 'admin.html';
-                        return;
-                    }
-
+                    if(!this.user || this.user.role === 'admin') return;
                     try {
-                        // PERBAIKAN: Hapus pemanggilan API admin yang menyebabkan error 403 pada user biasa
                         const [uRes, jRes, pRes, tRes] = await Promise.all([
                             this.api(`/users?id=${this.user.id}`),
                             this.api(`/jobs`),
@@ -104,42 +111,45 @@
                         ]);
                         
                         this.user = { ...this.user, ...uRes.user };
+                        this.bankInfo = uRes.bank_info || {};
+                        this.referrals = uRes.referrals || { l1:[], l2:[], l3:[] };
                         this.dashboard = { income: uRes.user.today_income, tasks_done: uRes.user.tasks_done };
                         this.jobs = jRes.jobs;
                         this.completedIds = jRes.completed_ids;
                         this.plans = pRes;
                         this.transactions = tRes;
+                        if(uRes.running_text) this.settings.running_text = uRes.running_text;
                         
-                        // Ambil running text dari respon users.js (Pastikan backend users.js sudah mengembalikannya)
-                        if(uRes.running_text) {
-                            this.settings.running_text = uRes.running_text;
-                        }
-
                         localStorage.setItem('user', JSON.stringify(this.user));
-                    } catch(e) { console.log("Refresh failed", e); }
+                    } catch(e) { console.error(e); }
                 },
 
-                // --- AUTH ---
+                // --- AUTH (PHONE BASED) ---
                 async login() {
-                    if (!this.forms.login.username || !this.forms.login.password) {
-                        return this.showToast('Mohon isi username dan password', 'error');
-                    }
+                    if (!this.forms.login.phone || !this.forms.login.password) return this.showAlert('Gagal', 'Data belum lengkap');
                     this.isLoading = true;
                     try {
-                        const res = await this.api('/auth?type=login', 'POST', this.forms.login);
+                        // Auto append 62 dan hapus 0 di depan jika ada
+                        const cleanPhone = this.forms.login.phone.replace(/^0+/, '');
+                        const payload = { ...this.forms.login, phone: '62' + cleanPhone };
+                        
+                        const res = await this.api('/auth?type=login', 'POST', payload);
                         this.handleAuthSuccess(res);
-                    } catch(e) {} finally { this.isLoading = false; }
+                    } catch(e){} finally { this.isLoading = false; }
                 },
 
                 async register() {
+                    if (!this.forms.register.phone || !this.forms.register.password) return this.showAlert('Gagal', 'Data belum lengkap');
                     this.isLoading = true;
                     try {
-                        await this.api('/auth?type=register', 'POST', this.forms.register);
-                        this.showToast('Pendaftaran berhasil! Silakan Login.');
+                        const cleanPhone = this.forms.register.phone.replace(/^0+/, '');
+                        const payload = { ...this.forms.register, phone: '62' + cleanPhone };
+                        
+                        await this.api('/auth?type=register', 'POST', payload);
+                        this.showAlert('Sukses', 'Pendaftaran berhasil. Silakan login.');
                         this.authMode = 'login';
-                        // Auto-fill username for convenience
-                        this.forms.login.username = this.forms.register.username;
-                    } catch(e) {} finally { this.isLoading = false; }
+                        this.forms.login.phone = this.forms.register.phone;
+                    } catch(e){} finally { this.isLoading = false; }
                 },
 
                 handleAuthSuccess(res) {
@@ -147,49 +157,81 @@
                     this.user = res.user;
                     localStorage.setItem('token', res.token);
                     localStorage.setItem('user', JSON.stringify(res.user));
-                    
                     if (res.user.role === 'admin') window.location.href = 'admin.html';
                     else this.refreshData();
                 },
 
                 logout() {
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    this.token = null;
-                    this.user = null;
-                    this.view = 'home';
-                    this.authMode = 'login';
+                    localStorage.clear();
+                    this.token = null; this.user = null; this.view = 'home'; this.authMode = 'login';
                 },
 
-                // --- FEATURES ---
+                // --- ACTIONS ---
                 async deposit() {
-                    if (!this.forms.deposit.amount) return;
-                    this.isLoading = true;
-                    try {
-                        await this.api('/transactions', 'POST', { type: 'deposit', ...this.forms.deposit });
-                        this.forms.deposit.amount = '';
-                        await this.refreshData();
-                    } catch(e){} finally { this.isLoading = false; }
+                    if (this.forms.deposit.amount < 10000) return this.showAlert('Info', 'Minimal deposit Rp 10.000');
+                    this.confirmAction('Konfirmasi Deposit', `Deposit Rp ${this.fmtMoney(this.forms.deposit.amount)} via ${this.forms.deposit.method}?`, async () => {
+                        this.isLoading = true;
+                        try {
+                            await this.api('/transactions', 'POST', { type: 'deposit', ...this.forms.deposit });
+                            this.forms.deposit.amount = '';
+                            this.view = 'history';
+                            await this.refreshData();
+                            this.showAlert('Berhasil', 'Deposit diajukan. Silakan transfer & tunggu konfirmasi admin.');
+                        } catch(e){} finally { this.isLoading = false; this.modal.visible = false; }
+                    });
                 },
 
                 async withdraw() {
-                    if (!this.forms.withdraw.amount) return;
+                    // Cek Bank Binding
+                    if (!this.bankInfo.account_number) {
+                        this.showAlert('Data Bank Kosong', 'Silakan lengkapi data bank di menu Profil sebelum menarik dana.');
+                        this.view = 'bank_binding';
+                        return;
+                    }
+                    if (this.forms.withdraw.amount < 50000) return this.showAlert('Info', 'Minimal withdraw Rp 50.000');
+
+                    this.confirmAction('Konfirmasi Penarikan', `Tarik saldo Rp ${this.fmtMoney(this.forms.withdraw.amount)} ke ${this.bankInfo.bank_name}?`, async () => {
+                        this.isLoading = true;
+                        try {
+                            await this.api('/transactions', 'POST', { type: 'withdrawal', amount: this.forms.withdraw.amount });
+                            this.forms.withdraw.amount = '';
+                            this.view = 'history';
+                            await this.refreshData();
+                            this.showAlert('Berhasil', 'Penarikan sedang diproses.');
+                        } catch(e){} finally { this.isLoading = false; this.modal.visible = false; }
+                    });
+                },
+
+                async saveBank() {
                     this.isLoading = true;
                     try {
-                        await this.api('/transactions', 'POST', { type: 'withdrawal', account_info: this.forms.withdraw.account, amount: this.forms.withdraw.amount });
-                        this.forms.withdraw.amount = '';
+                        await this.api('/users', 'POST', { action: 'update_bank', ...this.forms.bank });
                         await this.refreshData();
+                        this.view = 'profile';
+                        this.showAlert('Sukses', 'Data bank berhasil disimpan.');
                     } catch(e){} finally { this.isLoading = false; }
                 },
 
-                async buyPlan(id) {
-                    if(!confirm("Beli paket ini? Saldo akan terpotong.")) return;
+                async changePass() {
+                    if (this.forms.pass.new.length < 6) return this.showAlert('Error', 'Password minimal 6 karakter');
                     this.isLoading = true;
                     try {
-                        const res = await this.api('/plans', 'POST', { plan_id: id });
-                        this.showToast(res.message);
-                        await this.refreshData();
+                        await this.api('/users', 'POST', { action: 'change_pass', ...this.forms.pass });
+                        this.forms.pass = {old:'', new:''};
+                        this.showAlert('Sukses', 'Password berhasil diubah.');
+                        this.view = 'profile';
                     } catch(e){} finally { this.isLoading = false; }
+                },
+
+                async buyPlan(p) {
+                    this.confirmAction('Upgrade Membership', `Beli paket ${p.name} seharga ${this.fmtMoney(p.price)}?`, async () => {
+                        this.isLoading = true;
+                        try {
+                            const res = await this.api('/plans', 'POST', { plan_id: p.id });
+                            await this.refreshData();
+                            this.showAlert('Sukses', res.message);
+                        } catch(e){} finally { this.isLoading = false; this.modal.visible = false; }
+                    });
                 },
 
                 // --- PLAYER ---
@@ -208,265 +250,358 @@
                     this.isLoading = true;
                     try {
                         const res = await this.api('/jobs', 'POST', { action: 'claim', job_id: this.activeJob.id });
-                        this.showToast(res.message);
+                        this.showAlert('Komisi Diterima', `Selamat! Anda mendapatkan ${this.fmtMoney(res.reward)}`);
                         this.closePlayer();
                         await this.refreshData();
                     } catch(e){} finally { this.isLoading = false; }
                 },
 
-                closePlayer() {
-                    clearInterval(this.playerInterval);
-                    this.activeJob = null;
-                    this.view = 'jobs';
-                },
+                closePlayer() { clearInterval(this.playerInterval); this.activeJob = null; this.view = 'jobs'; },
 
-                // --- HELPER ---
+                // --- HELPERS ---
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 getYtId(url) { const m = url?.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/); return (m && m[2].length === 11) ? m[2] : null; },
-                showToast(msg, type='success') { this.toast = { visible: true, message: msg, type }; setTimeout(() => this.toast.visible = false, 3000); },
-                copyRef() { navigator.clipboard.writeText(this.user.referral_code); this.showToast('Kode Referral Disalin!'); }
+                copyRef() { navigator.clipboard.writeText(this.user.referral_code); this.showAlert('Tersalin', 'Kode referral berhasil disalin'); }
             }
         }
     </script>
     
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
-    <style>[x-cloak] { display: none !important; }</style>
+    <style>
+        [x-cloak] { display: none !important; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .gradient-gold { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans antialiased h-screen flex flex-col" x-data="appData()" x-init="init()">
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col" x-data="appData()" x-init="init()">
 
-    <!-- Toast -->
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[100]" x-show="toast.visible" x-transition x-cloak>
-        <div :class="toast.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'" class="text-white px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 font-medium text-sm">
-            <i :class="toast.type === 'error' ? 'fa-circle-xmark' : 'fa-circle-check'" class="fa-solid"></i>
-            <span x-text="toast.message"></span>
+    <!-- CUSTOM MODAL OVERLAY -->
+    <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" x-show="modal.visible" x-transition x-cloak>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all scale-100">
+            <div class="p-6 text-center">
+                <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" :class="modal.type==='confirm'?'bg-blue-100 text-blue-600':'bg-emerald-100 text-emerald-600'">
+                    <i class="fa-solid text-2xl" :class="modal.type==='confirm'?'fa-question':'fa-check'"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-900 mb-2" x-text="modal.title"></h3>
+                <p class="text-sm text-slate-500 mb-6" x-text="modal.message"></p>
+                <div class="flex gap-3">
+                    <button x-show="modal.type==='confirm'" @click="modal.visible=false" class="flex-1 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50">Batal</button>
+                    <button @click="modal.onConfirm ? modal.onConfirm() : modal.visible=false" class="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg shadow-slate-200">OK</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- AUTH SCREEN -->
+    <!-- AUTH SCREEN (PHONE BASED) -->
     <template x-if="!token">
         <div class="fixed inset-0 z-50 bg-white flex items-center justify-center p-6">
             <div class="w-full max-w-sm">
-                <div class="text-center mb-8">
-                    <div class="w-16 h-16 bg-primary text-white rounded-2xl mx-auto flex items-center justify-center text-2xl mb-4 shadow-lg shadow-primary/30"><i class="fa-solid fa-play"></i></div>
-                    <h1 class="text-2xl font-bold text-slate-900">WatchJob</h1>
-                    <p class="text-slate-500 text-sm">Earn by Watching</p>
+                <div class="text-center mb-10">
+                    <div class="w-20 h-20 bg-primary text-white rounded-3xl mx-auto flex items-center justify-center text-3xl mb-4 shadow-xl shadow-primary/30"><i class="fa-solid fa-play"></i></div>
+                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">WatchJob ID</h1>
+                    <p class="text-slate-400 text-sm">Platform Monetisasi Video</p>
                 </div>
                 
-                <div class="bg-slate-100 p-1 rounded-lg flex mb-6">
-                    <button @click="authMode='login'" :class="authMode==='login'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-2 text-sm font-bold rounded-md transition">Login</button>
-                    <button @click="authMode='register'" :class="authMode==='register'?'bg-white shadow text-primary':'text-slate-400'" class="flex-1 py-2 text-sm font-bold rounded-md transition">Daftar</button>
+                <!-- TABS -->
+                <div class="bg-slate-100 p-1.5 rounded-xl flex mb-8 relative">
+                    <div class="absolute inset-y-1.5 w-1/2 bg-white rounded-lg shadow-sm transition-transform duration-300 ease-out" :class="authMode==='login'?'translate-x-0':'translate-x-full'"></div>
+                    <button @click="authMode='login'" :class="authMode==='login'?'text-primary':'text-slate-400'" class="flex-1 py-2.5 text-sm font-bold rounded-lg relative z-10 transition">Masuk</button>
+                    <button @click="authMode='register'" :class="authMode==='register'?'text-primary':'text-slate-400'" class="flex-1 py-2.5 text-sm font-bold rounded-lg relative z-10 transition">Daftar</button>
                 </div>
 
-                <!-- LOGIN FORM (TERPISAH UNTUK MENGHINDARI BUG BINDING) -->
-                <form x-show="authMode==='login'" @submit.prevent="login()" class="space-y-4">
-                    <div>
-                        <input x-model="forms.login.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username" required>
+                <!-- LOGIN FORM -->
+                <form x-show="authMode==='login'" @submit.prevent="login()" class="space-y-5" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><span class="text-slate-500 font-bold text-sm border-r border-slate-300 pr-3">+62</span></div>
+                        <input x-model="forms.login.phone" type="tel" class="w-full pl-20 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="812xxxxxxx" required>
                     </div>
-                    <div>
-                        <input x-model="forms.login.password" type="password" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Password" required>
-                    </div>
-                    <button type="submit" :disabled="isLoading" class="w-full py-3 bg-primary text-white font-bold rounded-lg shadow-lg shadow-primary/20 hover:bg-primary-light transition disabled:opacity-50 flex justify-center gap-2">
+                    <input x-model="forms.login.password" type="password" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Kata Sandi" required>
+                    <button type="submit" :disabled="isLoading" class="w-full py-3.5 bg-primary text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition flex justify-center gap-2">
                         <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                        <span x-show="!isLoading">Masuk</span>
+                        <span>Masuk Sekarang</span>
                     </button>
                 </form>
 
-                <!-- REGISTER FORM (TERPISAH) -->
-                <form x-show="authMode==='register'" @submit.prevent="register()" class="space-y-4">
-                    <div>
-                        <input x-model="forms.register.username" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Username Baru" required>
+                <!-- REGISTER FORM -->
+                <form x-show="authMode==='register'" @submit.prevent="register()" class="space-y-5" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><span class="text-slate-500 font-bold text-sm border-r border-slate-300 pr-3">+62</span></div>
+                        <input x-model="forms.register.phone" type="tel" class="w-full pl-20 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="812xxxxxxx" required>
                     </div>
-                    <div>
-                        <input x-model="forms.register.email" type="email" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Email Aktif" required>
-                    </div>
-                    <div>
-                        <input x-model="forms.register.password" type="password" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Password (Min. 6 Karakter)" required>
-                    </div>
-                    <div>
-                        <input x-model="forms.register.ref_code" class="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary outline-none" placeholder="Kode Referral (Opsional)">
-                    </div>
-                    <button type="submit" :disabled="isLoading" class="w-full py-3 bg-primary text-white font-bold rounded-lg shadow-lg shadow-primary/20 hover:bg-primary-light transition disabled:opacity-50 flex justify-center gap-2">
+                    <input x-model="forms.register.password" type="password" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Buat Kata Sandi" required>
+                    <input x-model="forms.register.ref_code" class="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Kode Referral (Opsional)">
+                    <button type="submit" :disabled="isLoading" class="w-full py-3.5 bg-primary text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition flex justify-center gap-2">
                         <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                        <span x-show="!isLoading">Buat Akun</span>
+                        <span>Daftar Akun</span>
                     </button>
                 </form>
-
             </div>
         </div>
     </template>
 
-    <!-- APP LAYOUT -->
-    <div class="flex flex-col h-full max-w-md mx-auto bg-white shadow-2xl relative" x-show="token && user">
+    <!-- MAIN APP -->
+    <div class="flex flex-col h-full max-w-lg mx-auto bg-white shadow-2xl relative" x-show="token && user">
         
-        <!-- Header -->
-        <header class="h-14 bg-white border-b flex items-center justify-between px-5 shrink-0 z-20" x-show="view!=='player'">
+        <!-- TOP BAR -->
+        <header class="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 z-20" x-show="view!=='player'">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs" x-text="user?.username?.substring(0,2).toUpperCase()"></div>
-                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Saldo</p><p class="font-bold text-sm leading-none" x-text="fmtMoney(user?.balance)"></p></div>
+                <div class="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs ring-2 ring-primary/10" x-text="user?.username?.substring(0,2).toUpperCase()"></div>
+                <div>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Saldo</p>
+                    <p class="font-bold text-base leading-none text-slate-800" x-text="fmtMoney(user?.balance)"></p>
+                </div>
             </div>
-            <button @click="logout" class="text-slate-400 hover:text-red-500"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <button @click="logout" class="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center"><i class="fa-solid fa-power-off"></i></button>
         </header>
 
-        <!-- Running Text -->
-        <div x-show="view==='home' && settings.running_text" class="bg-primary text-white text-xs py-1.5 overflow-hidden whitespace-nowrap shrink-0">
-            <div class="inline-block animate-marquee px-4" x-text="settings.running_text"></div>
+        <!-- RUNNING TEXT -->
+        <div x-show="view==='home' && settings.running_text" class="bg-slate-800 text-white text-xs py-2 overflow-hidden whitespace-nowrap shrink-0 relative z-10">
+            <div class="inline-block animate-marquee px-4 font-medium" x-text="settings.running_text"></div>
         </div>
 
-        <!-- Content -->
-        <main class="flex-1 overflow-y-auto bg-slate-50 p-5 pb-24 relative">
+        <!-- CONTENT AREA -->
+        <main class="flex-1 overflow-y-auto bg-slate-50 p-5 pb-28 relative">
             
-            <!-- HOME -->
+            <!-- HOME VIEW -->
             <div x-show="view==='home'" class="space-y-6 animate-fade-in">
-                <div class="bg-gradient-to-br from-primary to-slate-800 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+                <!-- Hero Card -->
+                <div class="bg-primary rounded-3xl p-6 text-white shadow-card relative overflow-hidden">
                     <div class="relative z-10">
-                        <p class="text-slate-400 text-xs font-medium mb-1">Pendapatan Hari Ini</p>
-                        <h2 class="text-3xl font-bold tracking-tight mb-4" x-text="fmtMoney(dashboard.income)"></h2>
-                        <div class="flex gap-3">
-                            <button @click="view='plans'" class="bg-white text-primary px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-100">Upgrade</button>
-                            <div class="bg-white/10 px-4 py-1.5 rounded-lg text-xs font-medium">Tugas: <span x-text="dashboard.tasks_done"></span></div>
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <p class="text-slate-400 text-xs font-medium mb-1">Paket Aktif</p>
+                                <div class="inline-flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+                                    <i class="fa-solid fa-crown text-gold text-xs"></i>
+                                    <span class="text-xs font-bold" x-text="plans.find(p => p.name === user?.plan_name)?.name || 'Trial Member'"></span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-slate-400 text-xs font-medium mb-1">Pendapatan Hari Ini</p>
+                                <p class="text-xl font-bold text-emerald-400" x-text="fmtMoney(dashboard.income)"></p>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
+                            <div class="text-xs text-slate-300">Tugas Selesai: <span class="text-white font-bold" x-text="dashboard.tasks_done"></span></div>
+                            <button @click="view='plans'" class="bg-gold text-slate-900 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-gold-light shadow-lg shadow-gold/20">Upgrade Level</button>
                         </div>
                     </div>
-                    <i class="fa-solid fa-chart-simple absolute -bottom-2 -right-2 text-8xl text-white/5"></i>
+                    <div class="absolute -bottom-6 -right-6 text-8xl text-white/5"><i class="fa-solid fa-wallet"></i></div>
                 </div>
 
-                <div class="grid grid-cols-4 gap-3">
-                    <button @click="view='jobs'" class="bg-white p-3 rounded-xl border hover:border-primary/30 transition flex flex-col items-center gap-2 shadow-sm"><div class="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center"><i class="fa-brands fa-youtube"></i></div><span class="text-[10px] font-bold text-slate-600">Misi</span></button>
-                    <button @click="view='wallet'" class="bg-white p-3 rounded-xl border hover:border-primary/30 transition flex flex-col items-center gap-2 shadow-sm"><div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center"><i class="fa-solid fa-wallet"></i></div><span class="text-[10px] font-bold text-slate-600">Dompet</span></button>
-                    <button @click="view='referral'" class="bg-white p-3 rounded-xl border hover:border-primary/30 transition flex flex-col items-center gap-2 shadow-sm"><div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center"><i class="fa-solid fa-users"></i></div><span class="text-[10px] font-bold text-slate-600">Tim</span></button>
-                    <button @click="view='profile'" class="bg-white p-3 rounded-xl border hover:border-primary/30 transition flex flex-col items-center gap-2 shadow-sm"><div class="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center"><i class="fa-solid fa-user-gear"></i></div><span class="text-[10px] font-bold text-slate-600">Akun</span></button>
+                <!-- Investment Style Menu -->
+                <div class="grid grid-cols-4 gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <button @click="view='deposit'" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-circle-down"></i></div><span class="text-[10px] font-bold text-slate-600">Deposit</span></button>
+                    <button @click="withdraw" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-circle-up"></i></div><span class="text-[10px] font-bold text-slate-600">Withdraw</span></button>
+                    <button @click="view='referral'" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-users"></i></div><span class="text-[10px] font-bold text-slate-600">Tim</span></button>
+                    <button @click="view='history'" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left"></i></div><span class="text-[10px] font-bold text-slate-600">Riwayat</span></button>
+                    <button @click="view='bank_binding'" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-building-columns"></i></div><span class="text-[10px] font-bold text-slate-600">Bank</span></button>
+                    <button @click="view='change_pass'" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-lock"></i></div><span class="text-[10px] font-bold text-slate-600">Keamanan</span></button>
+                    <button class="flex flex-col items-center gap-2 group cursor-not-allowed opacity-50"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl shadow-sm"><i class="fa-solid fa-headset"></i></div><span class="text-[10px] font-bold text-slate-400">CS</span></button>
+                    <button class="flex flex-col items-center gap-2 group cursor-not-allowed opacity-50"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl shadow-sm"><i class="fa-solid fa-info-circle"></i></div><span class="text-[10px] font-bold text-slate-400">Info</span></button>
                 </div>
             </div>
 
-            <!-- JOBS -->
+            <!-- JOBS VIEW -->
             <div x-show="view==='jobs'" class="space-y-4">
-                <h2 class="font-bold text-slate-800">Daftar Misi</h2>
+                <div class="flex justify-between items-center"><h2 class="font-bold text-lg text-slate-800">Misi Tersedia</h2><span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">Reset 00:00 WIB</span></div>
                 <template x-for="job in jobs" :key="job.id">
-                    <div class="bg-white p-3 rounded-xl border shadow-sm flex gap-3 group cursor-pointer" @click="!completedIds.includes(job.id) && startJob(job)" :class="{'opacity-60': completedIds.includes(job.id)}">
-                        <div class="w-24 h-16 bg-slate-200 rounded overflow-hidden shrink-0 relative">
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex gap-4 cursor-pointer hover:shadow-md transition" @click="!completedIds.includes(job.id) && startJob(job)" :class="{'opacity-50 grayscale': completedIds.includes(job.id)}">
+                        <div class="w-32 h-20 bg-slate-200 rounded-xl overflow-hidden relative shrink-0">
                             <img :src="'https://img.youtube.com/vi/'+getYtId(job.youtube_url)+'/mqdefault.jpg'" class="w-full h-full object-cover">
-                            <div x-show="!completedIds.includes(job.id)" class="absolute inset-0 bg-black/20 flex items-center justify-center text-white"><i class="fa-solid fa-play"></i></div>
+                            <div class="absolute inset-0 bg-black/30 flex items-center justify-center text-white"><i class="fa-solid" :class="completedIds.includes(job.id)?'fa-check':'fa-play'"></i></div>
                         </div>
-                        <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-sm truncate" x-text="job.title"></h3>
-                            <div class="flex justify-between items-end mt-2">
-                                <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500"><i class="fa-regular fa-clock mr-1"></i> <span x-text="job.duration"></span>s</span>
-                                <span x-show="completedIds.includes(job.id)" class="text-emerald-500 text-xs font-bold"><i class="fa-solid fa-check-circle"></i> Selesai</span>
-                                <span x-show="!completedIds.includes(job.id)" class="text-primary text-xs font-bold">Start &rarr;</span>
+                        <div class="flex-1 py-1 flex flex-col justify-between">
+                            <h3 class="font-bold text-sm line-clamp-2 leading-tight" x-text="job.title"></h3>
+                            <div class="flex justify-between items-end">
+                                <div class="text-[10px] text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md"><i class="fa-regular fa-clock"></i> <span x-text="job.duration"></span> detik</div>
+                                <span x-show="!completedIds.includes(job.id)" class="text-primary text-xs font-bold bg-primary/10 px-3 py-1 rounded-full">Mulai</span>
+                                <span x-show="completedIds.includes(job.id)" class="text-emerald-600 text-xs font-bold">Selesai</span>
                             </div>
                         </div>
                     </div>
                 </template>
-                <div x-show="jobs.length===0" class="text-center py-10 text-slate-400 text-sm">Belum ada misi tersedia.</div>
+                <div x-show="jobs.length===0" class="p-8 text-center text-slate-400 text-sm bg-white rounded-xl border border-dashed">Belum ada misi untuk level Anda.</div>
             </div>
 
-            <!-- WALLET -->
-            <div x-show="view==='wallet'" class="space-y-6">
-                <div class="flex p-1 bg-white border rounded-lg">
-                    <button @click="forms.walletTab='depo'" :class="forms.walletTab==='depo'?'bg-slate-800 text-white shadow':'text-slate-500'" class="flex-1 py-2 text-xs font-bold rounded transition">DEPOSIT</button>
-                    <button @click="forms.walletTab='wd'" :class="forms.walletTab==='wd'?'bg-slate-800 text-white shadow':'text-slate-500'" class="flex-1 py-2 text-xs font-bold rounded transition">WITHDRAW</button>
-                </div>
+            <!-- PLANS VIEW -->
+            <div x-show="view==='plans'" class="space-y-4">
+                <h2 class="font-bold text-lg text-slate-800">Upgrade Membership</h2>
+                <template x-for="p in plans" :key="p.id">
+                    <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative">
+                         <!-- Banner -->
+                        <div class="h-28 bg-slate-800 relative">
+                             <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60" onerror="this.style.display='none'">
+                             <div class="absolute bottom-0 left-0 p-4"><h3 class="text-white font-bold text-xl" x-text="p.name"></h3></div>
+                        </div>
+                        <div class="p-5">
+                             <div class="flex justify-between items-end mb-4">
+                                 <div><p class="text-xs text-slate-400 font-bold uppercase">Harga Paket</p><p class="text-2xl font-bold text-primary" x-text="fmtMoney(p.price)"></p></div>
+                                 <div class="text-right"><span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded border border-emerald-100" x-text="p.duration_days + ' Hari'"></span></div>
+                             </div>
+                             <div class="grid grid-cols-2 gap-3 mb-5 text-xs">
+                                <div class="bg-slate-50 p-2 rounded border border-slate-100 text-center"><p class="text-slate-400">Misi Harian</p><p class="font-bold text-base" x-text="p.daily_jobs_limit"></p></div>
+                                <div class="bg-slate-50 p-2 rounded border border-slate-100 text-center"><p class="text-slate-400">Komisi/Misi</p><p class="font-bold text-base" x-text="fmtMoney(p.commission)"></p></div>
+                             </div>
+                             <div x-show="p.return_capital" class="mb-4 text-[10px] text-amber-600 font-bold flex items-center gap-1"><i class="fa-solid fa-rotate-left"></i> Jaminan Modal Kembali di akhir periode</div>
+                             <button @click="buyPlan(p)" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200">Aktifkan Paket</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
 
-                <div x-data="{tab:'depo'}" class="bg-white p-5 rounded-xl border shadow-sm" x-effect="tab=forms.walletTab || 'depo'">
-                    <h3 class="font-bold text-sm mb-4" x-text="tab==='depo'?'Isi Saldo':'Tarik Saldo'"></h3>
-                    <div class="space-y-3">
-                        <div><label class="text-xs font-bold text-slate-400">Jumlah (Rp)</label><input x-model="tab==='depo'?forms.deposit.amount:forms.withdraw.amount" type="number" class="w-full p-2 border rounded text-sm font-bold"></div>
-                        <div x-show="tab==='wd'"><label class="text-xs font-bold text-slate-400">Info Bank / E-Wallet</label><input x-model="forms.withdraw.account" class="w-full p-2 border rounded text-sm" placeholder="Bank - No.Rek - Nama"></div>
-                        <div x-show="tab==='depo'"><label class="text-xs font-bold text-slate-400">Metode</label><select x-model="forms.deposit.method" class="w-full p-2 border rounded text-sm"><option>Bank Transfer</option><option>QRIS</option><option>E-Wallet</option></select></div>
-                        <button @click="tab==='depo'?deposit():withdraw()" :disabled="isLoading" class="w-full py-2.5 bg-primary text-white rounded font-bold text-sm hover:bg-primary-light disabled:opacity-50">
-                            <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i> Processing</span>
-                            <span x-show="!isLoading">Konfirmasi</span>
-                        </button>
+            <!-- DEPOSIT VIEW -->
+            <div x-show="view==='deposit'" class="space-y-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border">
+                    <h3 class="font-bold text-slate-800 mb-4">Isi Saldo</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-400">Jumlah Deposit</label>
+                            <input x-model="forms.deposit.amount" type="number" class="w-full p-3 border rounded-xl text-sm font-bold mt-1 focus:ring-2 focus:ring-primary outline-none" placeholder="Min. 10.000">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400">Metode Pembayaran</label>
+                            <select x-model="forms.deposit.method" class="w-full p-3 border rounded-xl text-sm mt-1 bg-white"><option>Bank Transfer</option><option>QRIS</option><option>E-Wallet</option></select>
+                        </div>
+                        <button @click="deposit" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm shadow-lg">Lanjut Bayar</button>
                     </div>
                 </div>
+            </div>
 
-                <div class="space-y-2">
-                    <h3 class="font-bold text-xs text-slate-500 uppercase">Riwayat</h3>
+            <!-- HISTORY VIEW -->
+            <div x-show="view==='history'" class="space-y-4">
+                <h2 class="font-bold text-lg text-slate-800">Riwayat Transaksi</h2>
+                <div class="space-y-3">
                     <template x-for="tx in transactions" :key="tx.id">
-                        <div class="bg-white p-3 rounded-lg border flex justify-between items-center text-sm">
-                            <div>
-                                <p class="font-bold capitalize" :class="tx.type==='deposit'?'text-emerald-600':'text-slate-700'" x-text="tx.type"></p>
-                                <p class="text-[10px] text-slate-400" x-text="new Date(tx.created_at).toLocaleDateString()"></p>
+                        <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm" :class="['deposit','income','commission'].includes(tx.type)?'bg-emerald-50 text-emerald-600':'bg-red-50 text-red-600'">
+                                    <i class="fa-solid" :class="['deposit','income','commission'].includes(tx.type)?'fa-arrow-down':'fa-arrow-up'"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm capitalize text-slate-700" x-text="tx.type"></p>
+                                    <p class="text-[10px] text-slate-400" x-text="new Date(tx.created_at).toLocaleString()"></p>
+                                </div>
                             </div>
                             <div class="text-right">
-                                <p class="font-mono font-bold" x-text="fmtMoney(tx.amount)"></p>
-                                <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" :class="{'success':'bg-emerald-100 text-emerald-600','pending':'bg-amber-100 text-amber-600','failed':'bg-red-100 text-red-600'}[tx.status]" x-text="tx.status"></span>
+                                <p class="font-bold text-sm font-mono" :class="['deposit','income','commission'].includes(tx.type)?'text-emerald-600':'text-red-600'" x-text="(['deposit','income','commission'].includes(tx.type)?'+':'-') + fmtMoney(tx.amount)"></p>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize" :class="{'success':'bg-emerald-100 text-emerald-700','pending':'bg-amber-100 text-amber-700','failed':'bg-red-100 text-red-700'}[tx.status]" x-text="tx.status"></span>
                             </div>
                         </div>
                     </template>
+                    <div x-show="transactions.length===0" class="p-8 text-center text-slate-400 text-sm">Belum ada riwayat transaksi.</div>
                 </div>
             </div>
 
-            <!-- PLANS -->
-            <div x-show="view==='plans'" class="space-y-4">
-                <template x-for="p in plans" :key="p.id">
-                    <div class="bg-white border rounded-xl overflow-hidden shadow-sm group">
-                        <div class="h-24 bg-slate-800 relative overflow-hidden flex items-center justify-center">
-                             <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:scale-110 transition duration-700" onerror="this.style.display='none'">
-                             <h3 class="relative z-10 text-white font-bold text-xl uppercase tracking-wider" x-text="p.name"></h3>
-                        </div>
-                        <div class="p-4 text-center">
-                             <h2 class="text-2xl font-bold text-primary mb-2" x-text="fmtMoney(p.price)"></h2>
-                             <div class="text-xs text-slate-500 space-y-1 mb-4">
-                                <p><i class="fa-solid fa-check text-emerald-500 mr-1"></i> <span x-text="p.daily_jobs_limit"></span> Misi / Hari</p>
-                                <p><i class="fa-solid fa-check text-emerald-500 mr-1"></i> <span x-text="fmtMoney(p.commission)"></span> per Misi</p>
-                                <p><i class="fa-solid fa-check text-emerald-500 mr-1"></i> Aktif <span x-text="p.duration_days"></span> Hari</p>
-                             </div>
-                             <button @click="buyPlan(p.id)" class="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm hover:bg-slate-900">Beli Paket</button>
-                        </div>
-                    </div>
-                </template>
-            </div>
-
-            <!-- REFERRAL -->
-             <div x-show="view==='referral'" class="space-y-4">
-                <div class="bg-white p-6 rounded-xl border text-center shadow-sm">
-                    <p class="text-xs text-slate-500 font-bold uppercase">Kode Undangan Anda</p>
-                    <div @click="copyRef" class="mt-2 p-3 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 font-mono font-bold text-xl cursor-pointer hover:bg-slate-200 transition flex items-center justify-center gap-2">
-                        <span x-text="user?.referral_code"></span> <i class="fa-regular fa-copy text-sm text-slate-400"></i>
+            <!-- REFERRAL TEAM VIEW -->
+            <div x-show="view==='referral'" class="space-y-4" x-data="{ lvl: 'l1' }">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border text-center">
+                    <p class="text-xs text-slate-400 font-bold uppercase mb-2">Kode Undangan</p>
+                    <div @click="copyRef" class="bg-slate-50 border-2 border-dashed border-slate-200 p-3 rounded-xl font-mono font-bold text-xl cursor-pointer hover:bg-slate-100 transition flex justify-center gap-3">
+                        <span x-text="user?.referral_code"></span><i class="fa-regular fa-copy text-slate-400"></i>
                     </div>
                 </div>
-             </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                    <div class="flex border-b">
+                        <button @click="lvl='l1'" :class="lvl==='l1'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 1</button>
+                        <button @click="lvl='l2'" :class="lvl==='l2'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 2</button>
+                        <button @click="lvl='l3'" :class="lvl==='l3'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 3</button>
+                    </div>
+                    <div class="p-1 overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-500 uppercase font-bold"><tr><th class="p-3">Member</th><th class="p-3" x-show="lvl!=='l1'">Upline</th><th class="p-3 text-right">Waktu</th></tr></thead>
+                            <tbody class="divide-y">
+                                <template x-for="r in referrals[lvl]" :key="r.id">
+                                    <tr>
+                                        <td class="p-3 font-bold" x-text="r.username"></td>
+                                        <td class="p-3 text-slate-500" x-show="lvl!=='l1'" x-text="r.upline"></td>
+                                        <td class="p-3 text-right text-slate-400 text-[10px]" x-text="new Date(r.created_at).toLocaleDateString()"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="referrals[lvl].length === 0"><td colspan="3" class="p-6 text-center text-slate-400 italic">Belum ada data.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BANK BINDING VIEW -->
+            <div x-show="view==='bank_binding'" class="space-y-4">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                    <div class="flex items-center gap-3 mb-6">
+                         <div class="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600"><i class="fa-solid fa-building-columns"></i></div>
+                         <h3 class="font-bold text-lg">Data Rekening</h3>
+                    </div>
+                    <div class="space-y-4">
+                        <div><label class="text-xs font-bold text-slate-400">Nama Bank</label><input x-model="forms.bank.bank_name" x-init="forms.bank.bank_name = bankInfo.bank_name || ''" class="w-full p-3 border rounded-xl mt-1 text-sm"></div>
+                        <div><label class="text-xs font-bold text-slate-400">Nomor Rekening</label><input x-model="forms.bank.account_number" x-init="forms.bank.account_number = bankInfo.account_number || ''" type="number" class="w-full p-3 border rounded-xl mt-1 text-sm"></div>
+                        <div><label class="text-xs font-bold text-slate-400">Atas Nama</label><input x-model="forms.bank.account_name" x-init="forms.bank.account_name = bankInfo.account_name || ''" class="w-full p-3 border rounded-xl mt-1 text-sm"></div>
+                        <button @click="saveBank" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm shadow-lg">Simpan Rekening</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHANGE PASSWORD -->
+            <div x-show="view==='change_pass'" class="space-y-4">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h3 class="font-bold text-lg mb-4">Ganti Password</h3>
+                    <div class="space-y-4">
+                        <input x-model="forms.pass.old" type="password" placeholder="Password Lama" class="w-full p-3 border rounded-xl text-sm">
+                        <input x-model="forms.pass.new" type="password" placeholder="Password Baru (Min 6 karakter)" class="w-full p-3 border rounded-xl text-sm">
+                        <button @click="changePass" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm shadow-lg">Update Password</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- PROFILE -->
-            <div x-show="view==='profile'" class="space-y-4">
-                <div class="bg-white p-6 rounded-xl border text-center">
-                    <div class="w-20 h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-3xl text-slate-300 mb-3"><i class="fa-solid fa-user"></i></div>
-                    <h2 class="font-bold text-lg" x-text="user?.username"></h2>
-                    <p class="text-sm text-slate-500" x-text="user?.email"></p>
+            <div x-show="view==='profile'" class="space-y-4 text-center">
+                <div class="bg-white p-8 rounded-3xl border shadow-sm">
+                    <div class="w-24 h-24 bg-primary text-white rounded-full mx-auto flex items-center justify-center text-3xl font-bold mb-4 shadow-lg shadow-primary/30" x-text="user?.username?.substring(0,2).toUpperCase()"></div>
+                    <h2 class="font-bold text-xl" x-text="user?.username"></h2>
+                    <p class="text-sm text-slate-500 mb-6" x-text="'ID: ' + user?.referral_code"></p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button @click="view='bank_binding'" class="py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50">Data Bank</button>
+                        <button @click="view='change_pass'" class="py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50">Ganti Password</button>
+                    </div>
                 </div>
             </div>
 
         </main>
 
         <!-- PLAYER OVERLAY -->
-        <div x-show="view==='player'" class="fixed inset-0 z-[70] bg-black flex flex-col">
-            <div class="h-14 flex items-center justify-between px-4 bg-white/10 backdrop-blur absolute top-0 w-full z-10">
-                <button @click="closePlayer" class="text-white/80 hover:text-white text-sm font-bold bg-white/10 px-3 py-1 rounded-full">Tutup</button>
-                <span class="text-white font-bold text-sm" x-text="playerTimer > 0 ? playerTimer + 's' : 'Selesai'"></span>
+        <div x-show="view==='player'" class="fixed inset-0 z-[80] bg-black flex flex-col">
+            <div class="h-16 flex items-center justify-between px-6 bg-gradient-to-b from-black/80 to-transparent absolute top-0 w-full z-10">
+                <button @click="closePlayer" class="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-4 py-2 rounded-full backdrop-blur">Keluar</button>
+                <div class="flex items-center gap-2 bg-red-600/90 border border-red-500 text-white px-3 py-1 rounded-full text-xs font-bold backdrop-blur">
+                    <div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    <span x-text="playerTimer>0 ? playerTimer+' Detik' : 'Selesai'"></span>
+                </div>
             </div>
             <div class="flex-1 flex items-center justify-center relative bg-black">
                 <iframe :src="activeJob ? 'https://www.youtube.com/embed/'+getYtId(activeJob.youtube_url)+'?autoplay=1&controls=0&playsinline=1' : ''" class="w-full aspect-video pointer-events-none"></iframe>
-                <div x-show="!isFocused" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center text-white z-20">
-                    <i class="fa-solid fa-eye-slash text-4xl mb-2"></i>
-                    <p>Paused</p>
+                <div x-show="!isFocused" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-20">
+                    <i class="fa-solid fa-pause text-5xl mb-4 opacity-50"></i>
+                    <p class="font-bold">Video Dijeda</p>
+                    <p class="text-xs text-slate-400">Jangan tutup atau pindah tab.</p>
                 </div>
             </div>
-            <div class="p-5 pb-10 bg-slate-900">
-                <button :disabled="playerTimer>0" @click="claimReward" :class="playerTimer>0?'bg-slate-700 text-slate-500 cursor-not-allowed':'bg-emerald-500 text-white hover:bg-emerald-600'" class="w-full py-3.5 rounded-xl font-bold text-lg transition">
+            <div class="p-6 pb-10 bg-slate-900 rounded-t-3xl border-t border-white/10">
+                <h2 class="text-white font-bold mb-1 line-clamp-1" x-text="activeJob?.title"></h2>
+                <p class="text-slate-500 text-xs mb-6">Tonton sampai habis untuk klaim reward.</p>
+                <button :disabled="playerTimer>0" @click="claimReward" :class="playerTimer>0?'bg-slate-800 text-slate-600 cursor-not-allowed':'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20'" class="w-full py-4 rounded-2xl font-bold text-lg transition-all transform active:scale-95">
                     <span x-show="isLoading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-                    <span x-show="!isLoading && playerTimer>0">Tonton Video...</span>
-                    <span x-show="!isLoading && playerTimer<=0">KLAIM KOMISI</span>
+                    <span x-show="!isLoading" x-text="playerTimer>0 ? 'Tunggu Timer Habis...' : 'KLAIM HADIAH'"></span>
                 </button>
             </div>
         </div>
 
         <!-- BOTTOM NAV -->
-        <nav class="bg-white border-t flex justify-around items-center h-16 shrink-0 z-40 pb-2" x-show="view!=='player'">
-            <button @click="view='home'" :class="view==='home'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">Home</span></button>
-            <button @click="view='jobs'" :class="view==='jobs'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1"><i class="fa-solid fa-play-circle text-xl"></i><span class="text-[10px] font-bold">Misi</span></button>
-            <button @click="view='plans'" class="relative -top-5 bg-primary text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center border-4 border-white"><i class="fa-solid fa-gem text-xl"></i></button>
-            <button @click="view='wallet'" :class="view==='wallet'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1"><i class="fa-solid fa-wallet text-xl"></i><span class="text-[10px] font-bold">Dompet</span></button>
-            <button @click="view='profile'" :class="view==='profile'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">Saya</span></button>
+        <nav class="bg-white border-t flex justify-around items-center h-20 shrink-0 z-40 pb-4" x-show="view!=='player'">
+            <button @click="view='home'" :class="view==='home'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1 group"><i class="fa-solid fa-house text-xl group-active:scale-90 transition"></i><span class="text-[10px] font-bold">Beranda</span></button>
+            <button @click="view='jobs'" :class="view==='jobs'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1 group"><i class="fa-solid fa-play-circle text-xl group-active:scale-90 transition"></i><span class="text-[10px] font-bold">Misi</span></button>
+            <button @click="view='plans'" class="relative -top-6 bg-primary text-white w-16 h-16 rounded-full shadow-xl shadow-primary/30 flex items-center justify-center border-4 border-slate-50 group transition hover:scale-105"><i class="fa-solid fa-gem text-2xl group-active:rotate-12 transition"></i></button>
+            <button @click="view='wallet'" :class="view==='deposit'||view==='history'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1 group"><i class="fa-solid fa-wallet text-xl group-active:scale-90 transition"></i><span class="text-[10px] font-bold">Dompet</span></button>
+            <button @click="view='profile'" :class="view==='profile'?'text-primary':'text-slate-300'" class="flex flex-col items-center w-16 gap-1 group"><i class="fa-solid fa-user text-xl group-active:scale-90 transition"></i><span class="text-[10px] font-bold">Profil</span></button>
         </nav>
 
     </div>
