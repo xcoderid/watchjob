@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bank - WatchJob</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>tailwind.config = { theme: { extend: { colors: { primary: '#1e293b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="bankApp()" x-init="init()">
+    <header class="h-16 bg-white border-b flex items-center px-6 shrink-0 z-20">
+        <a href="profile.html" class="text-slate-600 hover:text-primary mr-4"><i class="fa-solid fa-arrow-left text-xl"></i></a>
+        <h1 class="font-bold text-lg text-slate-800">Data Rekening</h1>
+    </header>
+    <main class="flex-1 overflow-y-auto p-6">
+        <div class="space-y-4">
+            <div><label class="text-xs font-bold text-slate-400">Nama Bank</label><input x-model="form.bank_name" class="w-full p-3 border rounded-xl mt-1 text-sm" placeholder="Contoh: BCA"></div>
+            <div><label class="text-xs font-bold text-slate-400">Nomor Rekening</label><input x-model="form.account_number" type="number" class="w-full p-3 border rounded-xl mt-1 text-sm" placeholder="Nomor Rekening Anda"></div>
+            <div><label class="text-xs font-bold text-slate-400">Atas Nama</label><input x-model="form.account_name" class="w-full p-3 border rounded-xl mt-1 text-sm" placeholder="Nama Pemilik Rekening"></div>
+            <button @click="save" :disabled="loading" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm shadow-lg mt-4">Simpan Perubahan</button>
+        </div>
+    </main>
+    <script>
+        function bankApp() {
+            return {
+                form: { bank_name: '', account_number: '', account_name: '' },
+                loading: false,
+                async init() {
+                    if(!localStorage.getItem('token')) return window.location.href = 'index.html';
+                    const u = JSON.parse(localStorage.getItem('user'));
+                    const res = await fetch(`/api/users?id=${u.id}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                    const data = await res.json();
+                    if(data.bank_info) this.form = data.bank_info;
+                },
+                async save() {
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/users', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ action: 'update_bank', ...this.form })
+                        });
+                        if(!res.ok) throw new Error('Gagal menyimpan');
+                        alert('Tersimpan!');
+                        window.location.href = 'profile.html';
+                    } catch(e) { alert(e.message); } finally { this.loading = false; }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
