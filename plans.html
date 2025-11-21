@@ -92,7 +92,7 @@
         
         <template x-for="p in plans" :key="p.id">
             <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative group"
-                 :class="getButtonText(p.id) === 'SUDAH DILEVEL LEBIH TINGGI' || getButtonText(p.id) === 'PAKET ANDA SAAT INI' ? 'opacity-70 grayscale' : ''">
+                 :class="!canBuy(p.id) || userBalance < p.price ? 'opacity-70 grayscale' : ''">
                 <div class="h-32 bg-slate-800 relative overflow-hidden">
                      <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60 transition duration-700 group-hover:scale-105" onerror="this.style.display='none'">
                      <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
@@ -134,10 +134,10 @@
                      </div>
 
                      <button @click="confirmBuy(p)" 
-                             :disabled="!canBuy(p.id)"
+                             :disabled="!canBuy(p.id) || userBalance < p.price"
                              class="w-full py-3.5 rounded-xl font-bold text-sm transition transform active:scale-95"
-                             :class="canBuy(p.id) ? 'bg-primary text-white hover:bg-slate-800 shadow-lg shadow-slate-200' : 'bg-slate-300 text-slate-500 cursor-not-allowed'">
-                         <span x-text="getButtonText(p.id)"></span>
+                             :class="canBuy(p.id) && userBalance >= p.price ? 'bg-primary text-white hover:bg-slate-800 shadow-lg shadow-slate-200' : 'bg-slate-300 text-slate-500 cursor-not-allowed'">
+                         <span x-text="getButtonText(p.id, p.price)"></span>
                      </button>
                 </div>
             </div>
@@ -187,7 +187,6 @@
                         this.userBalance = userData.user.balance;
                         
                         // KRITIS: Ambil ID plan aktif user saat ini. Jika Trial/Free (diasumsikan ID 1).
-                        // Gunakan plan.id dari response API, atau 1 jika tidak ada plan aktif.
                         this.currentPlanId = userData.plan ? userData.plan.id : 1; 
                         
                         // Perbarui localStorage dengan data terbaru (termasuk balance)
@@ -205,33 +204,33 @@
                     }
                 },
 
-                // KRITIS: Logika Cek Pembelian (Membandingkan ID Plan)
+                // Logika Cek Pembelian (Membandingkan ID Plan)
                 canBuy(planId) {
                     // Hanya bisa beli jika ID plan baru LEBIH BESAR dari ID plan aktif
-                    // Ini otomatis mencegah pembelian plan yang sama atau downgrade.
                     return planId > this.currentPlanId;
                 },
 
-                getButtonText(planId) {
+                getButtonText(planId, planPrice) {
                     if (planId === this.currentPlanId) return 'PAKET ANDA SAAT INI';
                     if (planId < this.currentPlanId) return 'ANDA SUDAH DIATAS LEVEL INI';
+                    
+                    // Cek Saldo hanya jika plan lebih tinggi (canBuy = true)
+                    if (this.userBalance < planPrice) return 'SALDO ANDA BELUM CUKUP';
+                    
                     return 'AKTIFKAN PAKET INI';
                 },
 
                 // 1. Tampilkan Modal Konfirmasi
                 confirmBuy(p) {
-                    if (!this.canBuy(p.id)) {
-                        // Logic untuk menampilkan pesan yang berbeda berdasarkan ID
-                        if (p.id === this.currentPlanId) {
-                            // Abaikan, karena tombol sudah menunjukkan "PAKET ANDA SAAT INI"
-                            return; 
-                        } else if (p.id < this.currentPlanId) {
-                            this.showModal('error', 'Pembelian Ditolak', 'Anda tidak dapat melakukan downgrade atau membeli paket yang lebih rendah.');
-                            return;
-                        }
+                    // Logika Gabungan untuk memfilter semua kondisi penolakan
+                    if (p.id === this.currentPlanId) {
+                        this.showModal('error', 'Pembelian Ditolak', 'Anda sudah berada di paket ini.');
+                        return;
+                    } 
+                    if (p.id < this.currentPlanId) {
+                        this.showModal('error', 'Pembelian Ditolak', 'Anda tidak dapat melakukan downgrade atau membeli paket yang lebih rendah.');
+                        return;
                     }
-
-                    // Cek Saldo sebelum menampilkan modal konfirmasi
                     if (this.userBalance < p.price) {
                          this.showModal('error', 'Saldo Tidak Cukup', `Saldo Anda (${this.fmtMoney(this.userBalance)}) tidak mencukupi untuk membeli paket ${p.name}.`);
                          return;
