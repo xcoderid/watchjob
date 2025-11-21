@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nonton - WatchJob</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { theme: { extend: { colors: { primary: '#1e293b', gold: '#f59e0b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>.aspect-video{aspect-ratio:16/9;}</style>
+</head>
+<body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="playerApp()" x-init="init()">
+
+    <!-- HEADER -->
+    <header class="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 z-20">
+        <a href="jobs.html" class="text-slate-600 hover:text-primary"><i class="fa-solid fa-arrow-left text-xl"></i></a>
+        <h1 class="font-bold text-lg text-slate-800">Nonton Video</h1>
+        <div class="w-6"></div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="flex-1 overflow-y-auto p-5 space-y-5">
+        
+        <!-- Video Container -->
+        <div class="bg-black rounded-2xl overflow-hidden shadow-xl relative aspect-video group">
+            <!-- Thumbnail -->
+            <div x-show="status === 'idle'" class="absolute inset-0 w-full h-full">
+                <img :src="job ? 'https://img.youtube.com/vi/'+getYtId(job.youtube_url)+'/hqdefault.jpg' : ''" class="w-full h-full object-cover opacity-80">
+                <div class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 hover:bg-black/40 transition" @click="play">
+                    <div class="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center shadow-lg"><i class="fa-solid fa-play text-white text-2xl pl-1"></i></div>
+                </div>
+            </div>
+
+            <!-- Iframe -->
+            <div x-show="status !== 'idle'" class="w-full h-full">
+                <iframe :src="status !== 'idle' ? 'https://www.youtube.com/embed/'+getYtId(job?.youtube_url)+'?autoplay=1&controls=0&playsinline=1' : ''" class="w-full h-full pointer-events-none"></iframe>
+            </div>
+
+            <!-- Pause Overlay -->
+            <div x-show="status === 'playing' && !isFocused" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-30">
+                <i class="fa-solid fa-pause text-4xl mb-2 opacity-50"></i>
+                <p class="font-bold">Dijeda</p>
+                <p class="text-xs text-slate-400">Jangan pindah tab!</p>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+            <h1 class="font-bold text-lg text-slate-900 leading-tight mb-3" x-text="job?.title || 'Memuat...'"></h1>
+            
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Estimasi Komisi</p>
+                    <p class="text-emerald-600 font-bold text-lg" x-text="fmtMoney(commission)"></p>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Waktu Tonton</p>
+                    <p class="text-slate-800 font-bold text-lg" :class="timer > 0 ? 'text-amber-600' : 'text-emerald-600'" x-text="timer > 0 ? timer + ' Detik' : 'Selesai'"></p>
+                </div>
+            </div>
+
+            <button :disabled="timer > 0 || status !== 'done'" @click="claim" :class="(timer > 0 || status !== 'done') ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-primary text-white hover:bg-slate-800 shadow-lg'" class="w-full py-3 rounded-xl text-sm font-bold transition">
+                <span x-show="!loading" x-text="status === 'done' ? 'KLAIM KOMISI' : 'Tonton Sampai Habis'"></span>
+                <span x-show="loading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        function playerApp() {
+            return {
+                job: null,
+                commission: 0,
+                timer: 0,
+                status: 'idle', // idle, playing, done
+                isFocused: true,
+                interval: null,
+                loading: false,
+                
+                async init() {
+                    if(!localStorage.getItem('token')) return window.location.href = 'index.html';
+                    
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const id = urlParams.get('id');
+                    if(!id) return window.location.href = 'jobs.html';
+
+                    document.addEventListener("visibilitychange", () => { this.isFocused = !document.hidden; });
+
+                    // Fetch specific job data (Currently fetch all and find, ideal is endpoint for single job)
+                    try {
+                        const res = await fetch('/api/jobs', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                        const data = await res.json();
+                        this.job = data.jobs.find(j => j.id == id);
+                        this.commission = data.user_commission;
+                        this.timer = this.job ? this.job.duration : 0;
+                        if(!this.job) alert('Job tidak ditemukan');
+                    } catch(e) { alert('Gagal memuat data'); }
+                },
+                
+                play() {
+                    this.status = 'playing';
+                    this.interval = setInterval(() => {
+                        if(this.isFocused && this.timer > 0) {
+                            this.timer--;
+                        } else if (this.timer <= 0) {
+                            this.status = 'done';
+                            clearInterval(this.interval);
+                        }
+                    }, 1000);
+                },
+
+                async claim() {
+                    if(this.timer > 0) return;
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/jobs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ action: 'claim', job_id: this.job.id })
+                        });
+                        const json = await res.json();
+                        if(!res.ok) throw new Error(json.error);
+                        
+                        alert(`Sukses! Komisi ${this.fmtMoney(json.reward)} diterima.`);
+                        window.location.href = 'dashboard.html';
+                    } catch(e) { alert(e.message); } finally { this.loading = false; }
+                },
+
+                getYtId(url) { const m = url?.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/); return (m && m[2].length === 11) ? m[2] : null; },
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+            }
+        }
+    </script>
+</body>
+</html>
