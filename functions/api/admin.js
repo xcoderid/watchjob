@@ -136,11 +136,20 @@ export async function onRequestPost(context) {
 
   try {
     if (action === 'update_settings') {
-        const { l1, l2, l3, running_text } = body;
+        // Menerima 6 field persentase baru
+        const { l1, l2, l3, rabat_l1, rabat_l2, rabat_l3, running_text } = body;
         await env.DB.batch([
+            // Referral Upgrade Commissions
             env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('affiliate_l1', ?)").bind(l1),
             env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('affiliate_l2', ?)").bind(l2),
             env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('affiliate_l3', ?)").bind(l3),
+            
+            // Rabat Task Commissions (NEW FIELDS)
+            env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('rabat_l1', ?)").bind(rabat_l1),
+            env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('rabat_l2', ?)").bind(rabat_l2),
+            env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('rabat_l3', ?)").bind(rabat_l3),
+            
+            // Running Text
             env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('running_text', ?)").bind(running_text)
         ]);
         return jsonResponse({ success: true });
@@ -168,26 +177,27 @@ export async function onRequestPost(context) {
 
 
     if (action === 'create_plan') {
-        const { name, price, duration, daily_jobs, commission, return_capital, thumbnail, min_active_referrals, referral_percent, rabat_percent } = body;
+        // Hapus referral_percent dan rabat_percent dari payload karena sudah global
+        const { name, price, duration, daily_jobs, commission, return_capital, thumbnail, min_active_referrals } = body;
         const watchDur = 30; 
 
         await env.DB.prepare(`
-          INSERT INTO plans (name, price, duration_days, daily_jobs_limit, commission, return_capital, watch_duration, thumbnail_url, is_active, min_active_referrals, referral_percent, rabat_percent)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, watchDur, thumbnail, min_active_referrals, referral_percent, rabat_percent).run();
+          INSERT INTO plans (name, price, duration_days, daily_jobs_limit, commission, return_capital, watch_duration, thumbnail_url, is_active, min_active_referrals)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, watchDur, thumbnail, min_active_referrals).run();
         
         return jsonResponse({ success: true });
     }
 
     if (action === 'update_plan') {
-        const { id, name, price, duration, daily_jobs, commission, return_capital, thumbnail, min_active_referrals, referral_percent, rabat_percent } = body;
-        const watchDur = 30; // Watch duration tetap 30 atau ambil dari plan lama
-
+        // Hapus referral_percent dan rabat_percent dari payload update
+        const { id, name, price, duration, daily_jobs, commission, return_capital, thumbnail, min_active_referrals } = body;
+        
         await env.DB.prepare(`
             UPDATE plans SET name=?, price=?, duration_days=?, daily_jobs_limit=?, commission=?, 
-            return_capital=?, thumbnail_url=?, min_active_referrals=?, referral_percent=?, rabat_percent=? 
+            return_capital=?, thumbnail_url=?, min_active_referrals=? 
             WHERE id=?
-        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, thumbnail, min_active_referrals, referral_percent, rabat_percent, id).run();
+        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, thumbnail, min_active_referrals, id).run();
         
         return jsonResponse({ success: true });
     }
