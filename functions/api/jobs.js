@@ -88,35 +88,49 @@ export async function onRequestPost(context) {
 
         // 4. LOGIKA RABAT (Komisi Upline dari Tugas Downline) - MENGGUNAKAN SETTINGS GLOBAL
         if (user.referrer_id && sub.id !== 1) { // Downline bukan Trial
-            const settingsRes = await env.DB.prepare("SELECT key, value FROM site_settings WHERE key LIKE 'affiliate_l%'").all();
-            const rates = { 'affiliate_l1': 0 }; // Rabat tugas hanya L1 yang penting, sisanya dari setting
-            if(settingsRes.results) { rates['affiliate_l1'] = parseFloat(settingsRes.results.find(s => s.key === 'affiliate_l1')?.value || 0); }
+            const settingsRes = await env.DB.prepare("SELECT key, value FROM site_settings WHERE key LIKE 'rabat_l%'").all();
+            const rates = {}; 
+            if(settingsRes.results) { 
+                settingsRes.results.forEach(s => rates[s.key] = parseFloat(s.value));
+            }
             
-            const rabatRateL1 = rates['affiliate_l1'] || 0; // Menggunakan rate L1 sebagai rabat tugas L1
+            // Fungsi untuk memproses rabat berjenjang (L1, L2, L3)
+            const processRabat = async (level, downlineUser) => {
+                const rateKey = `rabat_l${level}`;
+                const rate = rates[rateKey] || 0;
+                
+                if (rate === 0 || !downlineUser.referrer_id) return;
 
-            // L1 Upline
-            const l1 = await env.DB.prepare('SELECT id, referrer_id, username FROM users WHERE id = ?').bind(user.referrer_id).first();
-            if (l1) {
+                const upline = await env.DB.prepare('SELECT id, referrer_id, username FROM users WHERE id = ?').bind(downlineUser.referrer_id).first();
+                if (!upline) return;
+                
                 const uplinePlan = await env.DB.prepare(`
-                    SELECT p.price as upline_plan_price 
-                    FROM user_subscriptions s 
-                    JOIN plans p ON s.plan_id = p.id 
-                    WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
-                `).bind(l1.id).first();
+                   SELECT p.price as upline_plan_price 
+                   FROM user_subscriptions s JOIN plans p ON s.plan_id = p.id 
+                   WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
+                `).bind(upline.id).first();
 
                 // Rabat hanya diberikan jika Upline punya paket aktif (untuk capping)
                 if (uplinePlan) {
-                    let rabatAmount = (commission * rabatRateL1) / 100;
+                    let rabatAmount = (commission * rate) / 100;
                     
                     // Capping rabat tugas: Maksimal rabat tidak boleh melebihi harga paket Upline
                     if (rabatAmount > uplinePlan.upline_plan_price) { rabatAmount = uplinePlan.upline_plan_price; }
 
                     if (rabatAmount > 0) {
-                        ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l1.id, rabatAmount, `Rabat L1 dari ${user.username} (Task)`));
-                        await updateUserBalance(env, l1.id, rabatAmount); // KRITIS: Update Saldo Upline L1
+                        ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(upline.id, rabatAmount, `Rabat L${level} dari ${user.username} (Task)`));
+                        await updateUserBalance(env, upline.id, rabatAmount); // KRITIS: Update Saldo Upline
+                    }
+                    
+                    // Lanjutkan ke level berikutnya
+                    if (level < 3) {
+                        await processRabat(level + 1, upline);
                     }
                 }
-            }
+            };
+            
+            // Mulai proses Rabat dari level 1 (dengan downline saat ini)
+            await processRabat(1, user);
         }
 
         await env.DB.batch(ops);
