@@ -67,7 +67,7 @@ export async function onRequestPost(context) {
       // 2. Potong Saldo & Catat Transaksi Expense
       ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'expense', ?, ?, 'success')").bind(userId, finalPrice, `Beli Paket: ${plan.name}`));
       
-      // KRITIS: Langsung perbarui kolom users.balance (DEBIT)
+      // Langsung perbarui kolom users.balance (DEBIT)
       await updateUserBalance(env, userId, -finalPrice);
 
       // 3. Update Subscription
@@ -103,7 +103,7 @@ export async function onRequestPost(context) {
 
                  if (commissionL1 > 0) {
                      ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l1.id, commissionL1, `Refferal L1 dari ${user.username}`));
-                     await updateUserBalance(env, l1.id, commissionL1); // KRITIS: Update Saldo Upline L1
+                     await updateUserBalance(env, l1.id, commissionL1); // Update Saldo Upline L1
                  }
 
                  // --- Level 2 ---
@@ -122,7 +122,7 @@ export async function onRequestPost(context) {
 
                          if (commissionL2 > 0) {
                              ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l2.id, commissionL2, `Refferal L2 dari ${user.username}`));
-                             await updateUserBalance(env, l2.id, commissionL2); // KRITIS: Update Saldo Upline L2
+                             await updateUserBalance(env, l2.id, commissionL2); // Update Saldo Upline L2
                          }
                          
                          // --- Level 3 ---
@@ -141,7 +141,7 @@ export async function onRequestPost(context) {
                                  
                                  if (commissionL3 > 0) {
                                      ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l3.id, commissionL3, `Refferal L3 dari ${user.username}`));
-                                     await updateUserBalance(env, l3.id, commissionL3); // KRITIS: Update Saldo Upline L3
+                                     await updateUserBalance(env, l3.id, commissionL3); // Update Saldo Upline L3
                                  }
                              }
                          }
