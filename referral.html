@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tim - WatchJob</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { theme: { extend: { colors: { primary: '#1e293b', gold: '#f59e0b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>[x-cloak]{display:none}</style>
+</head>
+<body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="teamApp()" x-init="init()">
+
+    <header class="h-16 bg-white border-b flex items-center px-6 shrink-0 z-20">
+        <h1 class="font-bold text-lg text-slate-800">Tim Saya</h1>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-6">
+        <div class="bg-white p-5 rounded-2xl shadow-sm border text-center">
+            <p class="text-xs text-slate-400 font-bold uppercase mb-2">Kode Undangan</p>
+            <div @click="copy" class="bg-slate-50 border-2 border-dashed border-slate-200 p-3 rounded-xl font-mono font-bold text-xl cursor-pointer hover:bg-slate-100 transition flex justify-center gap-3">
+                <span x-text="refCode">...</span><i class="fa-regular fa-copy text-slate-400"></i>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div class="flex border-b">
+                <button @click="lvl='l1'" :class="lvl==='l1'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 1</button>
+                <button @click="lvl='l2'" :class="lvl==='l2'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 2</button>
+                <button @click="lvl='l3'" :class="lvl==='l3'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 3</button>
+            </div>
+            <div class="p-1 overflow-x-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-50 text-slate-500 uppercase font-bold"><tr><th class="p-3">Member</th><th class="p-3" x-show="lvl!=='l1'">Upline</th><th class="p-3 text-right">Waktu</th></tr></thead>
+                    <tbody class="divide-y">
+                        <template x-for="r in data[lvl]" :key="r.id">
+                            <tr>
+                                <td class="p-3 font-bold" x-text="r.username"></td>
+                                <td class="p-3 text-slate-500" x-show="lvl!=='l1'" x-text="r.upline"></td>
+                                <td class="p-3 text-right text-slate-400 text-[10px]" x-text="new Date(r.created_at).toLocaleDateString()"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="data[lvl].length === 0"><td colspan="3" class="p-6 text-center text-slate-400 italic">Belum ada data.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <nav class="bg-white border-t flex justify-around items-center h-20 shrink-0 z-40 pb-4 text-slate-400">
+        <a href="dashboard.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">Beranda</span></a>
+        <a href="jobs.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-play-circle text-xl"></i><span class="text-[10px] font-bold">Misi</span></a>
+        <a href="plans.html" class="relative -top-6 bg-primary text-white w-16 h-16 rounded-full shadow-xl flex items-center justify-center border-4 border-slate-50"><i class="fa-solid fa-gem text-2xl"></i></a>
+        <a href="wallet.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-wallet text-xl"></i><span class="text-[10px] font-bold">Dompet</span></a>
+        <a href="profile.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">Profil</span></a>
+    </nav>
+
+    <script>
+        function teamApp() {
+            return {
+                lvl: 'l1',
+                data: { l1: [], l2: [], l3: [] },
+                refCode: '',
+                async init() {
+                    if(!localStorage.getItem('token')) return window.location.href = 'index.html';
+                    const u = JSON.parse(localStorage.getItem('user'));
+                    this.refCode = u.referral_code;
+                    const res = await fetch(`/api/users?id=${u.id}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                    const json = await res.json();
+                    this.data = json.referrals;
+                },
+                copy() { navigator.clipboard.writeText(this.refCode); alert('Disalin!'); }
+            }
+        }
+    </script>
+</body>
+</html>
