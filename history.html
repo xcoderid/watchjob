@@ -23,8 +23,10 @@
         <template x-for="tx in transactions" :key="tx.id">
             <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex justify-between items-center">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm" :class="['deposit','income','commission'].includes(tx.type)?'bg-emerald-50 text-emerald-600':'bg-red-50 text-red-600'">
-                        <i class="fa-solid" :class="['deposit','income','commission'].includes(tx.type)?'fa-arrow-down':'fa-arrow-up'"></i>
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm" 
+                         :class="['deposit','income','commission', 'admin_add'].includes(tx.type) ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'">
+                        <i class="fa-solid" 
+                           :class="['deposit','income','commission', 'admin_add'].includes(tx.type) ? 'fa-arrow-down' : 'fa-arrow-up'"></i>
                     </div>
                     <div>
                         <p class="font-bold text-sm capitalize text-slate-700" x-text="tx.type"></p>
@@ -32,7 +34,11 @@
                     </div>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-sm font-mono" :class="['deposit','income','commission'].includes(tx.type)?'text-emerald-600':'text-red-600'" x-text="(['deposit','income','commission'].includes(tx.type)?'+':'-') + fmtMoney(tx.amount)"></p>
+                    <!-- PERBAIKAN LOGIKA SIGN: Menambahkan 'admin_add' ke kondisi positif -->
+                    <p class="font-bold text-sm font-mono" 
+                       :class="['deposit','income','commission', 'admin_add'].includes(tx.type) ? 'text-emerald-600' : 'text-red-600'" 
+                       x-text="(['deposit','income','commission', 'admin_add'].includes(tx.type) ? '+' : '-') + fmtMoney(tx.amount)"></p>
+                    
                     <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize" :class="{'success':'bg-emerald-100 text-emerald-700','pending':'bg-amber-100 text-amber-700','failed':'bg-red-100 text-red-700'}[tx.status]" x-text="tx.status"></span>
                 </div>
             </div>
