@@ -69,7 +69,6 @@
             return {
                 jobs: [],
                 completedIds: [],
-                // State baru wajib ada agar tidak undefined/0
                 daily_limit: 0,
                 tasks_done: 0,
                 countdown: '00:00:00',
@@ -77,7 +76,7 @@
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     this.fetchJobs();
-                    this.startTimer(); // Jalankan timer saat init
+                    this.startTimer();
                 },
                 
                 async fetchJobs() {
@@ -94,27 +93,22 @@
                         this.jobs = data.jobs || [];
                         this.completedIds = [];
                         
-                        // INI YANG KURANG SEBELUMNYA: Masukkan data kuota dari API ke variabel Alpine
                         this.daily_limit = data.daily_limit || 0;
                         this.tasks_done = data.tasks_done || 0;
 
                     } catch(e) {
-                         // alert(e.message); // Optional: matikan alert jika mengganggu
+                         // alert(e.message); 
                     }
                 },
 
                 startJob(job) {
-                    // Cek Kuota di Frontend
-                    if (this.daily_limit > 0 && this.tasks_done >= this.daily_limit) {
-                        return alert('Kuota harian habis.');
-                    }
+                    // Validasi klaim reward akan tetap dihandle oleh Backend saat user selesai nonton.
                     window.location.href = `player.html?id=${job.id}`;
                 },
 
                 startTimer() {
                     setInterval(() => {
                         const now = new Date();
-                        // Target 17:00 UTC (00:00 WIB)
                         let target = new Date();
                         target.setUTCHours(17, 0, 0, 0);
                         if (now.getUTCHours() >= 17) target.setDate(target.getDate() + 1);
