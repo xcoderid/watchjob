@@ -65,11 +65,100 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6" x-data="{ currentTab: 'plans' }">
             
-            <!-- FORM SECTION -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- ADD JOB -->
+            <!-- TABS NAVIGATION -->
+            <div class="flex bg-slate-100 p-1 rounded-xl w-full max-w-lg mx-auto">
+                <button @click="currentTab = 'plans'" :class="currentTab === 'plans' ? 'bg-white shadow text-primary' : 'text-slate-500'" class="flex-1 py-2 font-bold text-sm rounded-lg transition-all"><i class="fa-solid fa-gem mr-2"></i> Paket Membership</button>
+                <button @click="currentTab = 'jobs'" :class="currentTab === 'jobs' ? 'bg-white shadow text-primary' : 'text-slate-500'" class="flex-1 py-2 font-bold text-sm rounded-lg transition-all"><i class="fa-solid fa-video mr-2"></i> Daftar Misi Video</button>
+            </div>
+            
+            <!-- TAB 1: PLANS MANAGEMENT -->
+            <div x-show="currentTab === 'plans'" class="space-y-6 animate-fade-in">
+
+                <!-- ADD PLAN FORM -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-lg mb-4 text-slate-800">Buat Paket Membership</h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Basic Info -->
+                        <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label><input x-model="plan.name" class="w-full p-2 border rounded-lg text-sm" placeholder="VIP 1"></div>
+                        <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label><input x-model="plan.price" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
+
+                        <!-- Income Logic -->
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label><input x-model="plan.commission" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label><input x-model="plan.daily_jobs" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="5"></div>
+
+                        <!-- Constraints -->
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label><input x-model="plan.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30"></div>
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label><input x-model="plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
+
+                        <!-- Commission Settings -->
+                        <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-2">
+                            <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Pengaturan Komisi Upline</p>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label><input x-model="plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
+                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label><input x-model="plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
+                            </div>
+                        </div>
+
+                        <!-- Appearance -->
+                        <div class="col-span-2"><label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label><input x-model="plan.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://..."></div>
+                    </div>
+
+                    <div class="flex items-center gap-2 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer" @click="plan.return_capital = !plan.return_capital">
+                        <div class="w-5 h-5 border-2 rounded flex items-center justify-center transition" :class="plan.return_capital ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'"><i x-show="plan.return_capital" class="fa-solid fa-check text-white text-xs"></i></div>
+                        <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
+                    </div>
+
+                    <button @click="createPlan" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Paket Baru</button>
+                </div>
+
+                <!-- LIST PLANS TABLE -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b font-bold text-sm text-slate-600 uppercase tracking-wider">Daftar Paket Membership</div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm text-left">
+                            <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-[10px]">
+                                <tr>
+                                    <th class="p-3">Nama/Harga</th>
+                                    <th class="p-3">Komisi/Limit</th>
+                                    <th class="p-3">Ref L1/Rabat</th>
+                                    <th class="p-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="p in plans" :key="p.id">
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-3">
+                                            <p class="font-bold" x-text="p.name"></p>
+                                            <p class="text-xs text-primary font-mono" x-text="fmtMoney(p.price)"></p>
+                                        </td>
+                                        <td class="p-3">
+                                            <p class="font-bold text-emerald-600" x-text="fmtMoney(p.commission)"></p>
+                                            <p class="text-xs text-slate-500" x-text="p.daily_jobs_limit + ' Jobs / Hari'"></p>
+                                        </td>
+                                        <td class="p-3">
+                                            <p class="font-bold text-blue-600" x-text="p.referral_percent + '%'"></p>
+                                            <p class="text-xs text-slate-500" x-text="p.rabat_percent + '% Rabat'"></p>
+                                        </td>
+                                        <td class="p-3 text-right">
+                                            <button @click="editPlan(p)" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                                            <button @click="deletePlan(p.id)" class="w-8 h-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="plans.length === 0"><td colspan="4" class="p-8 text-center text-slate-400 italic">Belum ada paket membership dibuat.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 2: JOBS MANAGEMENT -->
+            <div x-show="currentTab === 'jobs'" class="space-y-6 animate-fade-in" x-cloak>
+                <!-- ADD JOB FORM -->
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
                     <h3 class="font-bold text-lg mb-4 text-slate-800">Tambah Video Misi</h3>
                     <div class="space-y-4">
@@ -81,115 +170,82 @@
                             <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Judul Video</label>
                             <input x-model="job.title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="Judul Video">
                         </div>
-                        <button @click="createJob" class="w-full py-3 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition">Posting Job Baru</button>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-400 block mb-1">Minimal Level</label>
+                                <select x-model="job.min_plan" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition">
+                                    <template x-for="p in plans" :key="p.id">
+                                        <option :value="p.id" x-text="p.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <button @click="createJob" class="w-full py-3 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition self-end">Posting Job Baru</button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- ADD PLAN -->
+                <!-- LIST JOBS TABLE -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b font-bold text-sm text-slate-600 uppercase tracking-wider">Daftar Misi Video</div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm text-left">
+                            <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-[10px]">
+                                <tr>
+                                    <th class="p-3">Judul Video</th>
+                                    <th class="p-3">Durasi</th>
+                                    <th class="p-3">Min Level</th>
+                                    <th class="p-3 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <template x-for="j in jobs" :key="j.id">
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-3"><p class="font-bold line-clamp-1" x-text="j.title"></p><a :href="j.youtube_url" target="_blank" class="text-[10px] text-blue-500 hover:underline">Lihat Video</a></td>
+                                        <td class="p-3" x-text="j.duration + ' detik'"></td>
+                                        <td class="p-3" x-text="plans.find(p => p.id === j.min_plan_level)?.name || 'N/A'"></td>
+                                        <td class="p-3 text-right">
+                                            <button @click="deleteJob(j.id)" class="w-8 h-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="jobs.length === 0"><td colspan="4" class="p-8 text-center text-slate-400 italic">Belum ada misi video dibuat.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. SETTINGS VIEW -->
+            <div x-show="view==='settings'" class="max-w-2xl animate-fade-in" x-cloak>
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h3 class="font-bold text-lg mb-4 text-slate-800">Buat Paket Membership</h3>
+                    <h3 class="font-bold text-lg mb-6 text-slate-800">Pengaturan Global Website</h3>
                     
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <!-- Basic Info -->
-                        <div class="col-span-2 md:col-span-1">
-                            <label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label>
-                            <input x-model="plan.name" class="w-full p-2 border rounded-lg text-sm" placeholder="VIP 1">
-                        </div>
-                        <div class="col-span-2 md:col-span-1">
-                            <label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label>
-                            <input x-model="plan.price" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
+                    <div class="space-y-6">
+                        <div>
+                            <label class="text-sm font-bold text-slate-700 mb-2 block">Running Text (Pengumuman)</label>
+                            <textarea x-model="settings.running_text" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none" rows="3" placeholder="Tulis pengumuman di sini..."></textarea>
                         </div>
 
-                        <!-- Income Logic -->
-                        <div>
-                            <label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label>
-                            <input x-model="plan.commission" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label>
-                            <input x-model="plan.daily_jobs" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="5">
-                        </div>
-
-                        <!-- Constraints -->
-                        <div>
-                            <label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label>
-                            <input x-model="plan.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label>
-                            <input x-model="plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
-                        </div>
-
-                        <!-- Commission Settings -->
-                        <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-2">
-                            <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Pengaturan Komisi Upline</p>
-                            <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <label class="text-sm font-bold text-slate-700 mb-3 block">Persentase Komisi Referral (%)</label>
+                            <div class="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label>
-                                    <input x-model="plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0">
+                                    <span class="text-xs text-slate-400 block mb-1">Level 1 (Direct)</span>
+                                    <div class="relative"><input x-model="settings.l1" class="w-full p-2 border rounded-lg font-bold text-center"><span class="absolute right-3 top-2 text-slate-400 text-xs">%</span></div>
                                 </div>
                                 <div>
-                                    <label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label>
-                                    <input x-model="plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0">
+                                    <span class="text-xs text-slate-400 block mb-1">Level 2</span>
+                                    <div class="relative"><input x-model="settings.l2" class="w-full p-2 border rounded-lg font-bold text-center"><span class="absolute right-3 top-2 text-slate-400 text-xs">%</span></div>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-slate-400 block mb-1">Level 3</span>
+                                    <div class="relative"><input x-model="settings.l3" class="w-full p-2 border rounded-lg font-bold text-center"><span class="absolute right-3 top-2 text-slate-400 text-xs">%</span></div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Appearance -->
-                        <div class="col-span-2">
-                            <label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label>
-                            <input x-model="plan.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://...">
-                        </div>
+                        <button @click="saveSettings" class="w-full py-3 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Perubahan</button>
                     </div>
-
-                    <div class="flex items-center gap-2 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer" @click="plan.return_capital = !plan.return_capital">
-                        <div class="w-5 h-5 border-2 rounded flex items-center justify-center transition" :class="plan.return_capital ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'">
-                            <i x-show="plan.return_capital" class="fa-solid fa-check text-white text-xs"></i>
-                        </div>
-                        <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
-                    </div>
-
-                    <button @click="createPlan" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Paket Baru</button>
-                </div>
-            </div>
-            
-            <!-- LIST PLANS (NEW SECTION) -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden lg:col-span-2">
-                <div class="p-4 bg-slate-50 border-b font-bold text-sm text-slate-600 uppercase tracking-wider">Daftar Paket Membership</div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm text-left">
-                        <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-[10px]">
-                            <tr>
-                                <th class="p-3">Nama/Harga</th>
-                                <th class="p-3">Komisi/Limit</th>
-                                <th class="p-3">Ref L1/Rabat</th>
-                                <th class="p-3 text-right">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            <template x-for="p in plans" :key="p.id">
-                                <tr class="hover:bg-slate-50/50">
-                                    <td class="p-3">
-                                        <p class="font-bold" x-text="p.name"></p>
-                                        <p class="text-xs text-primary font-mono" x-text="fmtMoney(p.price)"></p>
-                                    </td>
-                                    <td class="p-3">
-                                        <p class="font-bold text-emerald-600" x-text="fmtMoney(p.commission)"></p>
-                                        <p class="text-xs text-slate-500" x-text="p.daily_jobs_limit + ' Jobs / Hari'"></p>
-                                    </td>
-                                    <td class="p-3">
-                                        <p class="font-bold text-blue-600" x-text="p.referral_percent + '%'"></p>
-                                        <p class="text-xs text-slate-500" x-text="p.rabat_percent + '% Rabat'"></p>
-                                    </td>
-                                    <td class="p-3 text-right">
-                                        <button @click="editPlan(p)" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                                        <button @click="deletePlan(p.id)" class="w-8 h-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition" title="Hapus"><i class="fa-solid fa-trash"></i></button>
-                                    </td>
-                                </tr>
-                            </template>
-                            <tr x-show="plans.length === 0"><td colspan="4" class="p-8 text-center text-slate-400 italic">Belum ada paket membership dibuat.</td></tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
 
@@ -204,7 +260,7 @@
         </div>
     </div>
     
-    <!-- MODAL EDIT PLAN (Untuk Tugas Selanjutnya) -->
+    <!-- MODAL EDIT PLAN -->
     <div x-show="editModal.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-cloak>
         <div class="bg-white rounded-2xl w-full max-w-lg p-6">
             <h3 class="font-bold text-lg mb-4">Edit Paket: <span x-text="editModal.plan.name"></span></h3>
@@ -219,7 +275,9 @@
             return {
                 sidebarOpen: false,
                 toast: { show: false, msg: '' },
-                plans: [], // State untuk daftar plans
+                plans: [], 
+                jobs: [], // State untuk daftar jobs
+                settings: { running_text: '', l1:0, l2:0, l3:0 },
                 
                 // Form States
                 job: { url: '', title: '', min_plan: 1 },
@@ -233,21 +291,26 @@
                 editModal: { show: false, plan: {} },
 
                 init() {
-                    if(!localStorage.getItem('token')) window.location.href='/index.html';
+                    if(!localStorage.getItem('token')) this.logout();
                     this.fetchData();
                 },
 
                 async fetchData() {
                     try {
-                        const [planRes, jobRes] = await Promise.all([
-                            fetch('/api/admin?type=plans', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
-                            fetch('/api/admin?type=jobs', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }) // Assuming jobs API exists
+                        const token = localStorage.getItem('token');
+                        const [planRes, jobRes, settingsRes] = await Promise.all([
+                            fetch('/api/admin?type=plans', { headers: { 'Authorization': `Bearer ${token}` } }),
+                            fetch('/api/admin?type=jobs', { headers: { 'Authorization': `Bearer ${token}` } }),
+                            fetch('/api/admin?type=settings', { headers: { 'Authorization': `Bearer ${token}` } })
                         ]);
                         
-                        if (planRes.status === 401 || jobRes.status === 401) { this.logout(); return; }
+                        if (planRes.status === 401 || jobRes.status === 401 || settingsRes.status === 401) { this.logout(); return; }
                         
                         this.plans = await planRes.json();
-                        // this.jobs = await jobRes.json(); // Data jobs tidak diperlukan di sini, hanya plans
+                        this.jobs = await jobRes.json();
+
+                        const s = await settingsRes.json();
+                        if(s.l1) this.settings = s;
                         
                         // Set default min_plan for job creation
                         if (this.plans.length > 0) {
@@ -255,7 +318,7 @@
                         }
 
                     } catch(e) {
-                         this.showToast('Gagal memuat data plans/jobs.', 'error');
+                         this.showToast('Gagal memuat data.', 'error');
                          console.error(e);
                     }
                 },
@@ -279,16 +342,7 @@
                     }
                 },
 
-                // --- ACTIONS ---
-                async createJob() {
-                    if(!this.job.url || !this.job.title) return this.showToast('Mohon lengkapi data job', 'error');
-                    
-                    await this.api({ action: 'create_job', ...this.job });
-                    this.showToast('Video Misi Berhasil Ditambahkan', 'success');
-                    this.job.title = ''; 
-                    this.job.url = '';
-                },
-
+                // --- PLANS ACTIONS ---
                 async createPlan() {
                     if(!this.plan.name || !this.plan.price) return this.showToast('Mohon lengkapi Nama dan Harga paket', 'error');
 
@@ -310,18 +364,36 @@
                 },
                 
                 editPlan(p) {
-                    // Hanya menampilkan modal placeholder
                     this.editModal.plan = p;
                     this.editModal.show = true;
+                    // Lakukan pre-fill form edit di sini jika fitur edit diimplementasikan
                 },
 
                 async deletePlan(id) {
                     if(!confirm('Anda yakin ingin menghapus paket ini?')) return;
-                    await this.api({ action: 'delete_plan', id }, 'POST'); // Asumsi API Admin mendukung delete_plan
+                    await this.api({ action: 'delete_plan', id }, 'POST'); 
                     this.showToast('Paket berhasil dihapus!', 'success');
                     this.fetchData(); // Refresh daftar plans
                 },
 
+                // --- JOBS ACTIONS ---
+                async createJob() {
+                    if(!this.job.url || !this.job.title) return this.showToast('Mohon lengkapi data job', 'error');
+                    
+                    await this.api({ action: 'create_job', ...this.job });
+                    this.showToast('Video Misi Berhasil Ditambahkan', 'success');
+                    this.job.title = ''; 
+                    this.job.url = '';
+                    this.fetchData(); // Refresh daftar jobs
+                },
+                
+                async deleteJob(id) {
+                    if(!confirm('Anda yakin ingin menghapus misi ini?')) return;
+                    await this.api({ action: 'delete_job', id }, 'POST'); 
+                    this.showToast('Misi video berhasil dihapus!', 'success');
+                    this.fetchData(); // Refresh daftar jobs
+                },
+                
                 // --- UTILS ---
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 
