@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - WatchJob Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>[x-cloak]{display:none}</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="settingsApp()" x-init="init()">
+
+    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100"><span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span></div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
+            <a href="admin_dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+            <a href="admin_users.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-users w-5 text-center"></i> Data Users</a>
+            <a href="admin_approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
+            <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
+            <a href="admin_content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
+            <a href="admin_settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center px-8">
+            <h2 class="text-lg font-bold text-slate-800">Pengaturan Global</h2>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-8">
+            <div class="max-w-2xl bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div class="space-y-6">
+                    <div>
+                        <label class="text-sm font-bold text-slate-700 mb-2 block">Running Text</label>
+                        <textarea x-model="set.running_text" class="w-full p-3 border rounded-xl text-sm" rows="3"></textarea>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border">
+                        <label class="text-sm font-bold text-slate-700 mb-3 block">Komisi Referral (%)</label>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div><span class="text-xs block mb-1">L1</span><input x-model="set.l1" class="w-full p-2 border rounded text-center"></div>
+                            <div><span class="text-xs block mb-1">L2</span><input x-model="set.l2" class="w-full p-2 border rounded text-center"></div>
+                            <div><span class="text-xs block mb-1">L3</span><input x-model="set.l3" class="w-full p-2 border rounded text-center"></div>
+                        </div>
+                    </div>
+                    <button @click="save" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm">Simpan Perubahan</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function settingsApp() {
+            return {
+                set: { running_text: '', l1:0, l2:0, l3:0 },
+                async init() {
+                    if(!localStorage.getItem('token')) return window.location.href='index.html';
+                    const res = await fetch('/api/admin?type=settings', { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} });
+                    this.set = await res.json();
+                },
+                async save() {
+                    await fetch('/api/admin', {
+                        method: 'POST', headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'update_settings', ...this.set })
+                    });
+                    alert('Disimpan');
+                }
+            }
+        }
+    </script>
+</body>
+</html>
