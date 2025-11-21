@@ -15,15 +15,16 @@ export async function onRequestPost(context) {
     
     if (!phone || !password) return jsonResponse({ error: 'Nomor HP dan Password wajib diisi' }, 400);
 
-    // Pastikan format phone 62
+    // Bersihkan dan pastikan format phone 62
     const cleanPhone = phone.replace(/[^0-9]/g, '');
 
     const hashedPassword = await hashPassword(password);
-    // Kita gunakan kolom 'username' untuk menyimpan No HP agar unik
+    
+    // Cari user berdasarkan username (yang diisi No HP)
     const user = await env.DB.prepare('SELECT * FROM users WHERE username = ? AND password_hash = ?').bind(cleanPhone, hashedPassword).first();
     
     if (!user) return jsonResponse({ error: 'Nomor HP atau password salah' }, 401);
-    if (user.status !== 'active') return jsonResponse({ error: 'Akun dibekukan hubungi admin' }, 403);
+    if (user.status !== 'active') return jsonResponse({ error: 'Akun dibekukan, silakan hubungi admin' }, 403);
 
     const newToken = crypto.randomUUID();
     await env.DB.prepare('UPDATE users SET auth_token = ? WHERE id = ?').bind(newToken, user.id).run();
@@ -39,7 +40,7 @@ export async function onRequestPost(context) {
 
     return jsonResponse({ 
         success: true, 
-        user: { ...user, balance, username: user.username }, // username is phone now
+        user: { ...user, balance, username: user.username }, 
         plan: sub || null, 
         token: newToken 
     });
@@ -52,7 +53,7 @@ export async function onRequestPost(context) {
     if (!phone || !password) return jsonResponse({ error: 'Data tidak lengkap' }, 400);
     if (password.length < 6) return jsonResponse({ error: 'Password minimal 6 karakter' }, 400);
 
-    // Format Phone Check
+    // 1. Format Phone Check
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     if (!cleanPhone.startsWith('62') || cleanPhone.length < 10) {
         return jsonResponse({ error: 'Format Nomor HP salah. Harus diawali 62...' }, 400);
@@ -68,16 +69,21 @@ export async function onRequestPost(context) {
     const myRefCode = 'REF' + Math.random().toString(36).substring(2, 8).toUpperCase();
     const initialToken = crypto.randomUUID();
 
+    // 2. SOLUSI FIX: GENERATE DUMMY EMAIL
+    // Ini memastikan kolom 'email' yang NOT NULL dan UNIQUE terisi dengan data yang valid.
+    const dummyEmail = `${cleanPhone}@watchjob.id`;
+
     try {
-      // INSERT: Kolom username diisi Phone, Email dikosongkan (NULL)
+      // 3. INSERT USER
+      // username diisi cleanPhone, email diisi dummyEmail
       const res = await env.DB.prepare(`
         INSERT INTO users (username, email, password_hash, referral_code, referrer_id, auth_token, role, status) 
-        VALUES (?, NULL, ?, ?, ?, ?, 'user', 'active')
-      `).bind(cleanPhone, hashedPassword, myRefCode, referrerId, initialToken).run();
+        VALUES (?, ?, ?, ?, ?, ?, 'user', 'active')
+      `).bind(cleanPhone, dummyEmail, hashedPassword, myRefCode, referrerId, initialToken).run();
       
       const userId = res.meta.last_row_id;
       
-      // Paket Trial 3 Hari
+      // 4. Berikan Paket Trial 3 Hari
       const trialDuration = 3; 
       const end = new Date(); 
       end.setDate(end.getDate() + trialDuration);
@@ -90,6 +96,7 @@ export async function onRequestPost(context) {
       return jsonResponse({ success: true, message: 'Registrasi Berhasil' });
 
     } catch (e) {
+      // Cek error constraint unik
       if (e.message.includes('UNIQUE')) return jsonResponse({ error: 'Nomor HP sudah terdaftar' }, 400);
       return jsonResponse({ error: 'Error: ' + e.message }, 500);
     }
