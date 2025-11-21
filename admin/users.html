@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users - WatchJob Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>[x-cloak]{display:none}</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="usersApp()" x-init="init()">
+
+    <!-- SIDEBAR -->
+    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100"><span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span></div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
+            <a href="admin_dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+            <a href="admin_users.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-users w-5 text-center"></i> Data Users</a>
+            <a href="admin_approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
+            <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
+            <a href="admin_content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
+            <a href="admin_settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <!-- CONTENT -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8">
+            <h2 class="text-lg font-bold text-slate-800">Manajemen User</h2>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-8">
+            <div class="flex justify-between items-center mb-6">
+                <div class="relative w-72">
+                    <input x-model.debounce.500ms="search" class="w-full pl-10 pr-4 py-2 bg-white border rounded-xl text-sm" placeholder="Cari No. HP...">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-xs border-b">
+                        <tr><th class="p-4">User</th><th class="p-4">Saldo</th><th class="p-4">Status</th><th class="p-4 text-right">Aksi</th></tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        <template x-for="u in users" :key="u.id">
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4"><p class="font-bold" x-text="u.username"></p><p class="text-[10px] text-slate-400" x-text="'ID: '+u.id"></p></td>
+                                <td class="p-4 font-mono font-bold" x-text="fmtMoney(u.balance)"></td>
+                                <td class="p-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold border uppercase" :class="u.status==='active'?'bg-emerald-50 text-emerald-600 border-emerald-100':'bg-red-50 text-red-600 border-red-100'" x-text="u.status"></span></td>
+                                <td class="p-4 text-right flex justify-end gap-2">
+                                    <button @click="openModal(u, 'balance')" class="w-8 h-8 rounded bg-slate-100 hover:text-emerald-600"><i class="fa-solid fa-wallet"></i></button>
+                                    <button @click="openModal(u, 'pass')" class="w-8 h-8 rounded bg-slate-100 hover:text-blue-600"><i class="fa-solid fa-key"></i></button>
+                                    <button @click="toggleBan(u)" class="w-8 h-8 rounded bg-slate-100 hover:text-red-600"><i class="fa-solid fa-ban"></i></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div class="p-4 border-t flex justify-between bg-slate-50">
+                    <button @click="page>1 && fetchUsers(page-1)" :disabled="page<=1" class="px-3 py-1 bg-white border rounded text-xs disabled:opacity-50">Prev</button>
+                    <span class="text-xs font-bold text-slate-500" x-text="`Page ${page}`"></span>
+                    <button @click="page<totalPages && fetchUsers(page+1)" :disabled="page>=totalPages" class="px-3 py-1 bg-white border rounded text-xs disabled:opacity-50">Next</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL -->
+    <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" x-show="modal.visible" x-transition x-cloak>
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6">
+            <h3 class="font-bold text-lg mb-4" x-text="modal.action==='balance'?'Atur Saldo':'Ganti Password'"></h3>
+            <p class="text-sm text-slate-500 mb-2">User: <span class="font-bold" x-text="modal.user?.username"></span></p>
+            
+            <div x-show="modal.action==='balance'">
+                <input x-model="actionValue" type="number" class="w-full p-3 border rounded-xl mb-2 font-bold" placeholder="Nominal (+/-)">
+                <p class="text-xs text-slate-400">Gunakan minus (-) untuk mengurangi.</p>
+            </div>
+            <div x-show="modal.action==='pass'">
+                <input x-model="actionValue" type="text" class="w-full p-3 border rounded-xl font-bold" placeholder="Password Baru">
+            </div>
+
+            <div class="flex gap-2 mt-6">
+                <button @click="modal.visible=false" class="flex-1 py-2 border rounded-xl text-sm">Batal</button>
+                <button @click="submitAction" class="flex-1 py-2 bg-primary text-white rounded-xl text-sm">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function usersApp() {
+            return {
+                users: [], page: 1, totalPages: 1, search: '',
+                modal: { visible: false, user: null, action: '' }, actionValue: '',
+                async init() {
+                    if(!localStorage.getItem('token')) return window.location.href='index.html';
+                    this.fetchUsers();
+                    this.$watch('search', () => { this.page=1; this.fetchUsers(); });
+                },
+                async fetchUsers(p=1) {
+                    this.page = p;
+                    const res = await fetch(`/api/admin?type=users&page=${p}&limit=10&q=${this.search}`, { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} });
+                    const json = await res.json();
+                    this.users = json.data; this.totalPages = json.pagination.total_pages;
+                },
+                openModal(u, act) { this.modal = { visible: true, user: u, action: act }; this.actionValue = ''; },
+                async submitAction() {
+                    if(!confirm('Yakin?')) return;
+                    const type = this.modal.action === 'balance' ? 'adjust_balance' : 'change_pass';
+                    await fetch('/api/admin', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'user_action', user_id: this.modal.user.id, type, value: this.actionValue })
+                    });
+                    this.modal.visible = false; this.fetchUsers(this.page);
+                },
+                async toggleBan(u) {
+                    if(!confirm(u.status==='active'?'Ban user?':'Unban user?')) return;
+                    await fetch('/api/admin', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
+                        body: JSON.stringify({ action: 'user_action', user_id: u.id, type: u.status==='active'?'ban':'unban' })
+                    });
+                    this.fetchUsers(this.page);
+                },
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+            }
+        }
+    </script>
+</body>
+</html>
