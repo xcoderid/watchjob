@@ -25,16 +25,25 @@
         <div class="flex justify-between items-center"><span class="text-sm font-bold text-slate-600">Tersedia Hari Ini</span><span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">Reset 00:00 WIB</span></div>
         
         <template x-for="job in jobs" :key="job.id">
-            <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex gap-4 cursor-pointer hover:shadow-md transition" @click="startJob(job)">
+            <div 
+                class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex gap-4 cursor-pointer hover:shadow-md transition" 
+                @click="!completedIds.includes(job.id) && startJob(job)" 
+                :class="{'opacity-50 grayscale': completedIds.includes(job.id)}"
+            >
                 <div class="w-32 h-20 bg-slate-200 rounded-xl overflow-hidden relative shrink-0">
                     <img :src="'https://img.youtube.com/vi/'+getYtId(job.youtube_url)+'/mqdefault.jpg'" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-black/30 flex items-center justify-center text-white"><i class="fa-solid fa-play"></i></div>
+                    <div class="absolute inset-0 bg-black/30 flex items-center justify-center text-white">
+                        <i class="fa-solid" :class="completedIds.includes(job.id)?'fa-check':'fa-play'"></i>
+                    </div>
                 </div>
                 <div class="flex-1 py-1 flex flex-col justify-between">
                     <h3 class="font-bold text-sm line-clamp-2 leading-tight" x-text="job.title"></h3>
                     <div class="flex justify-between items-end">
                         <div class="text-[10px] text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md"><i class="fa-regular fa-clock"></i> <span x-text="job.duration"></span>s</div>
-                        <span class="text-primary text-xs font-bold bg-primary/10 px-3 py-1 rounded-full">Mulai</span>
+                        
+                        <!-- Tanda Status Selesai -->
+                        <span x-show="!completedIds.includes(job.id)" class="text-primary text-xs font-bold bg-primary/10 px-3 py-1 rounded-full">Mulai</span>
+                        <span x-show="completedIds.includes(job.id)" class="text-emerald-600 text-xs font-bold">Selesai</span>
                     </div>
                 </div>
             </div>
@@ -55,16 +64,33 @@
         function jobsApp() {
             return {
                 jobs: [],
+                completedIds: [], // KRITIS: Inisialisasi sebagai array kosong
+                
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     this.fetchJobs();
                 },
                 async fetchJobs() {
                     try {
-                        const res = await fetch('/api/jobs', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                        const token = localStorage.getItem('token');
+                        const res = await fetch('/api/jobs', { headers: { 'Authorization': `Bearer ${token}` } });
+                        
+                        if (!res.ok) {
+                            if (res.status === 401) { this.logout(); return; }
+                            throw new Error('Gagal memuat misi.');
+                        }
+                        
                         const data = await res.json();
                         this.jobs = data.jobs || [];
-                    } catch(e){}
+                        // Di jobs.js, completed_ids sudah dihapus (karena kuota hanya membatasi total count), 
+                        // tetapi untuk menghindari error, kita inisialisasi sebagai array kosong jika tidak ada data dari API.
+                        // Jika Anda ingin menandai misi yang sudah diklaim, pastikan API Jobs mengembalikan data ini.
+                        // Untuk saat ini, kita biarkan kosong agar tidak terjadi error.
+                        this.completedIds = []; 
+
+                    } catch(e) {
+                         alert(e.message);
+                    }
                 },
                 startJob(job) {
                     // Redirect ke player.html dengan ID job
