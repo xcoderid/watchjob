@@ -84,7 +84,7 @@
     <!-- CONTENT -->
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-5">
         
-        <!-- KRITIS: TAMPILAN SALDO USER -->
+        <!-- TAMPILAN SALDO USER -->
         <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Saldo Anda Saat Ini</p>
             <p class="font-bold text-2xl text-primary" x-text="fmtMoney(userBalance || 0)"></p>
@@ -92,7 +92,7 @@
         
         <template x-for="p in plans" :key="p.id">
             <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative group"
-                 :class="!canBuy(p.id) ? 'opacity-70 grayscale' : ''">
+                 :class="getButtonText(p.id) === 'SUDAH DILEVEL LEBIH TINGGI' || getButtonText(p.id) === 'PAKET ANDA SAAT INI' ? 'opacity-70 grayscale' : ''">
                 <div class="h-32 bg-slate-800 relative overflow-hidden">
                      <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60 transition duration-700 group-hover:scale-105" onerror="this.style.display='none'">
                      <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
@@ -187,6 +187,7 @@
                         this.userBalance = userData.user.balance;
                         
                         // KRITIS: Ambil ID plan aktif user saat ini. Jika Trial/Free (diasumsikan ID 1).
+                        // Gunakan plan.id dari response API, atau 1 jika tidak ada plan aktif.
                         this.currentPlanId = userData.plan ? userData.plan.id : 1; 
                         
                         // Perbarui localStorage dengan data terbaru (termasuk balance)
@@ -207,25 +208,32 @@
                 // KRITIS: Logika Cek Pembelian (Membandingkan ID Plan)
                 canBuy(planId) {
                     // Hanya bisa beli jika ID plan baru LEBIH BESAR dari ID plan aktif
+                    // Ini otomatis mencegah pembelian plan yang sama atau downgrade.
                     return planId > this.currentPlanId;
                 },
 
                 getButtonText(planId) {
-                    if (planId === this.currentPlanId) return 'PAKET AKTIF';
-                    if (planId < this.currentPlanId) return 'SUDAH DILEVEL LEBIH TINGGI';
+                    if (planId === this.currentPlanId) return 'PAKET ANDA SAAT INI';
+                    if (planId < this.currentPlanId) return 'ANDA SUDAH DIATAS LEVEL INI';
                     return 'AKTIFKAN PAKET INI';
                 },
 
                 // 1. Tampilkan Modal Konfirmasi
                 confirmBuy(p) {
                     if (!this.canBuy(p.id)) {
-                        this.showModal('error', 'Pembelian Ditolak', 'Anda tidak dapat melakukan downgrade atau membeli paket yang sama/lebih rendah.');
-                        return;
+                        // Logic untuk menampilkan pesan yang berbeda berdasarkan ID
+                        if (p.id === this.currentPlanId) {
+                            // Abaikan, karena tombol sudah menunjukkan "PAKET ANDA SAAT INI"
+                            return; 
+                        } else if (p.id < this.currentPlanId) {
+                            this.showModal('error', 'Pembelian Ditolak', 'Anda tidak dapat melakukan downgrade atau membeli paket yang lebih rendah.');
+                            return;
+                        }
                     }
 
                     // Cek Saldo sebelum menampilkan modal konfirmasi
                     if (this.userBalance < p.price) {
-                         this.showModal('error', 'Saldo Tidak Cukup', `Saldo Anda (${this.fmtMoney(this.userBalance)}) tidak mencukupi untuk membeli paket ${p.name} seharga ${this.fmtMoney(p.price)}.`);
+                         this.showModal('error', 'Saldo Tidak Cukup', `Saldo Anda (${this.fmtMoney(this.userBalance)}) tidak mencukupi untuk membeli paket ${p.name}.`);
                          return;
                     }
                     
