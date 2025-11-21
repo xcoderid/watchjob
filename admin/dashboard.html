@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Admin - WatchJob</title>
+    <title>Dashboard - WatchJob Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -13,11 +13,12 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="adminDashApp()" x-init="init()">
 
+    <!-- MOBILE OVERLAY -->
+    <div class="fixed inset-0 bg-black/50 z-30 md:hidden" x-show="sidebarOpen" @click="sidebarOpen=false" x-transition x-cloak></div>
+
     <!-- SIDEBAR -->
-    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
-        <div class="h-16 flex items-center px-6 border-b border-slate-100">
-            <span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span>
-        </div>
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed md:static inset-y-0 left-0 w-64 bg-white border-r border-slate-200 z-40 transition-transform duration-300 md:translate-x-0 flex flex-col">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100"><span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span></div>
         <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
             <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
             <a href="dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
@@ -25,15 +26,19 @@
             <a href="approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
             <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
             <a href="content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
+            <a href="info.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Info & CS</a>
             <a href="settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
         </nav>
         <div class="p-4 border-t border-slate-100"><button @click="logout" class="w-full py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-50 transition">Keluar</button></div>
     </aside>
 
-    <!-- MAIN CONTENT -->
+    <!-- CONTENT -->
     <div class="flex-1 flex flex-col overflow-hidden">
         <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8">
-            <h2 class="text-lg font-bold text-slate-800">Dashboard Overview</h2>
+            <div class="flex items-center gap-4">
+                <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-slate-600 text-xl"><i class="fa-solid fa-bars"></i></button>
+                <h2 class="text-lg font-bold text-slate-800">Dashboard</h2>
+            </div>
             <div class="text-xs font-bold bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full">Admin Mode</div>
         </header>
 
@@ -70,14 +75,18 @@
     <script>
         function adminDashApp() {
             return {
+                sidebarOpen: false,
                 stats: { users:0, deposit:0, withdraw:0, pending:0 },
                 async init() {
                     if (!localStorage.getItem('token')) return window.location.href = '/index.html';
-                    const u = JSON.parse(localStorage.getItem('user'));
+                    const u = JSON.parse(localStorage.getItem('user') || '{}');
                     if(u.role !== 'admin') return window.location.href = '/dashboard.html';
                     
-                    const res = await fetch('/api/admin?type=stats', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-                    this.stats = await res.json();
+                    try {
+                        const res = await fetch('/api/admin?type=stats', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                        if(!res.ok) throw new Error('Failed');
+                        this.stats = await res.json();
+                    } catch(e){ console.log(e); }
                 },
                 logout() { localStorage.clear(); window.location.href = '/index.html'; },
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
