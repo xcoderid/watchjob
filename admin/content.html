@@ -76,42 +76,47 @@
             <!-- TAB 1: PLANS MANAGEMENT -->
             <div x-show="currentTab === 'plans'" class="space-y-6 animate-fade-in">
 
-                <!-- ADD PLAN FORM -->
+                <!-- ADD/EDIT PLAN FORM -->
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h3 class="font-bold text-lg mb-4 text-slate-800">Buat Paket Membership</h3>
+                    <h3 class="font-bold text-lg mb-4 text-slate-800" x-text="editModal.isEditing ? 'Edit Paket: ' + editModal.plan.name : 'Buat Paket Membership'"></h3>
                     
                     <div class="grid grid-cols-2 gap-4 mb-4">
                         <!-- Basic Info -->
-                        <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label><input x-model="plan.name" class="w-full p-2 border rounded-lg text-sm" placeholder="VIP 1"></div>
-                        <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label><input x-model="plan.price" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
+                        <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label><input x-model="planForm.name" class="w-full p-2 border rounded-lg text-sm" placeholder="VIP 1"></div>
+                        <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label><input x-model="planForm.price" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
 
                         <!-- Income Logic -->
-                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label><input x-model="plan.commission" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
-                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label><input x-model="plan.daily_jobs" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="5"></div>
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label><input x-model="planForm.commission" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label><input x-model="planForm.daily_jobs" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="5"></div>
 
                         <!-- Constraints -->
-                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label><input x-model="plan.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30"></div>
-                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label><input x-model="plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label><input x-model="planForm.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30"></div>
+                        <div><label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label><input x-model="planForm.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
 
                         <!-- Commission Settings -->
                         <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-2">
                             <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Pengaturan Komisi Upline</p>
                             <div class="grid grid-cols-2 gap-4">
-                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label><input x-model="plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
-                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label><input x-model="plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
+                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label><input x-model="planForm.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
+                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label><input x-model="planForm.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
                             </div>
                         </div>
 
                         <!-- Appearance -->
-                        <div class="col-span-2"><label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label><input x-model="plan.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://..."></div>
+                        <div class="col-span-2"><label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label><input x-model="planForm.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://..."></div>
                     </div>
 
-                    <div class="flex items-center gap-2 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer" @click="plan.return_capital = !plan.return_capital">
-                        <div class="w-5 h-5 border-2 rounded flex items-center justify-center transition" :class="plan.return_capital ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'"><i x-show="plan.return_capital" class="fa-solid fa-check text-white text-xs"></i></div>
+                    <div class="flex items-center gap-2 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer" @click="planForm.return_capital = !planForm.return_capital">
+                        <div class="w-5 h-5 border-2 rounded flex items-center justify-center transition" :class="planForm.return_capital ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'"><i x-show="planForm.return_capital" class="fa-solid fa-check text-white text-xs"></i></div>
                         <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
                     </div>
 
-                    <button @click="createPlan" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Paket Baru</button>
+                    <button @click="createOrUpdatePlan" class="w-full py-3" :class="editModal.isEditing ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'" :disabled="isLoading">
+                        <span x-text="editModal.isEditing ? 'SIMPAN PERUBAHAN' : 'SIMPAN PAKET BARU'"></span>
+                    </button>
+
+                    <button x-show="editModal.isEditing" @click="resetPlanForm" class="w-full py-2 mt-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition">Batal Edit</button>
+
                 </div>
 
                 <!-- LIST PLANS TABLE -->
@@ -143,7 +148,7 @@
                                             <p class="text-xs text-slate-500" x-text="p.rabat_percent + '% Rabat'"></p>
                                         </td>
                                         <td class="p-3 text-right">
-                                            <button @click="openEditModal(p)" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                                            <button @click="editPlan(p)" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
                                             <button @click="deletePlan(p.id)" class="w-8 h-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition" title="Hapus"><i class="fa-solid fa-trash"></i></button>
                                         </td>
                                     </tr>
@@ -164,16 +169,16 @@
                     <div class="space-y-4">
                         <div>
                             <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Link Youtube</label>
-                            <input x-model="job.url" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="https://youtube.com/...">
+                            <input x-model="jobForm.url" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="https://youtube.com/...">
                         </div>
                         <div>
                             <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Judul Video</label>
-                            <input x-model="job.title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="Judul Video">
+                            <input x-model="jobForm.title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="Judul Video">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="text-xs font-bold text-slate-400 block mb-1">Minimal Level</label>
-                                <select x-model="job.min_plan" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition">
+                                <select x-model="jobForm.min_plan" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition">
                                     <template x-for="p in plans" :key="p.id">
                                         <option :value="p.id" x-text="p.name"></option>
                                     </template>
@@ -215,40 +220,6 @@
                 </div>
             </div>
 
-            <!-- 5. SETTINGS VIEW -->
-            <div x-show="view==='settings'" class="max-w-2xl animate-fade-in" x-cloak>
-                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <h3 class="font-bold text-lg mb-6 text-slate-800">Pengaturan Global Website</h3>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <label class="text-sm font-bold text-slate-700 mb-2 block">Running Text (Pengumuman)</label>
-                            <textarea x-model="settings.running_text" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none" rows="3" placeholder="Tulis pengumuman di sini..."></textarea>
-                        </div>
-
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                            <label class="text-sm font-bold text-slate-700 mb-3 block">Persentase Komisi Referral (%)</label>
-                            <div class="grid grid-cols-3 gap-4">
-                                <div>
-                                    <span class="text-xs text-slate-400 block mb-1">Level 1 (Direct)</span>
-                                    <div class="relative"><input x-model="settings.l1" class="w-full p-2 border rounded-lg font-bold text-center"><span class="absolute right-3 top-2 text-slate-400 text-xs">%</span></div>
-                                </div>
-                                <div>
-                                    <span class="text-xs text-slate-400 block mb-1">Level 2</span>
-                                    <div class="relative"><input x-model="settings.l2" class="w-full p-2 border rounded-lg font-bold text-center"><span class="absolute right-3 top-2 text-slate-400 text-xs">%</span></div>
-                                </div>
-                                <div>
-                                    <span class="text-xs text-slate-400 block mb-1">Level 3</span>
-                                    <div class="relative"><input x-model="settings.l3" class="w-full p-2 border rounded-lg font-bold text-center"><span class="absolute right-3 top-2 text-slate-400 text-xs">%</span></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <button @click="saveSettings" class="w-full py-3 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Perubahan</button>
-                    </div>
-                </div>
-            </div>
-
         </main>
     </div>
 
@@ -262,10 +233,42 @@
     
     <!-- MODAL EDIT PLAN -->
     <div x-show="editModal.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-cloak>
-        <div class="bg-white rounded-2xl w-full max-w-lg p-6">
-            <h3 class="font-bold text-lg mb-4">Edit Paket: <span x-text="editModal.plan.name"></span></h3>
-            <p class="text-sm text-slate-500 mb-4">Fitur edit akan diimplementasikan pada langkah selanjutnya.</p>
-            <button @click="editModal.show = false" class="py-2 px-4 bg-primary text-white rounded">Tutup</button>
+        <div class="bg-white rounded-2xl w-full max-w-xl p-6 relative">
+            <button @click="editModal.show = false" class="absolute top-3 right-3 text-slate-500 hover:text-slate-800"><i class="fa-solid fa-times"></i></button>
+            <h3 class="font-bold text-lg mb-4" x-text="'Edit Paket: ' + editModal.plan.name"></h3>
+            <p class="text-xs text-red-500 mb-4">Penting: Setelah di edit, Plan akan langsung terupdate.</p>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label><input x-model="editModal.plan.name" class="w-full p-2 border rounded-lg text-sm"></div>
+                <div class="col-span-2 md:col-span-1"><label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label><input x-model="editModal.plan.price" type="number" class="w-full p-2 border rounded-lg text-sm"></div>
+                
+                <div><label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label><input x-model="editModal.plan.commission" type="number" class="w-full p-2 border rounded-lg text-sm"></div>
+                <div><label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label><input x-model="editModal.plan.daily_jobs_limit" type="number" class="w-full p-2 border rounded-lg text-sm"></div>
+                
+                <div><label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label><input x-model="editModal.plan.duration_days" type="number" class="w-full p-2 border rounded-lg text-sm"></div>
+                <div><label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label><input x-model="editModal.plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm"></div>
+                
+                <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Komisi Upline</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="text-[10px] text-slate-400 block mb-1">Upgrade (%)</label><input x-model="editModal.plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center"></div>
+                        <div><label class="text-[10px] text-slate-400 block mb-1">Rabat Tugas (%)</label><input x-model="editModal.plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center"></div>
+                    </div>
+                </div>
+
+                <div class="col-span-2">
+                    <label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label>
+                    <input x-model="editModal.plan.thumbnail_url" class="w-full p-2 border rounded-lg text-sm">
+                </div>
+
+                <div class="col-span-2 flex items-center gap-2 mt-2" @click="editModal.plan.return_capital = editModal.plan.return_capital == 1 ? 0 : 1">
+                    <input type="checkbox" :checked="editModal.plan.return_capital == 1" class="w-4 h-4">
+                    <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
+                </div>
+            </div>
+
+            <button @click="updatePlan" class="w-full py-3 mt-6 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition">UPDATE PAKET</button>
+            <button @click="editModal.show = false" class="w-full py-2 mt-2 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition">Tutup</button>
         </div>
     </div>
 
@@ -276,19 +279,20 @@
                 sidebarOpen: false,
                 toast: { show: false, msg: '' },
                 plans: [], 
-                jobs: [], // State untuk daftar jobs
+                jobs: [], 
                 settings: { running_text: '', l1:0, l2:0, l3:0 },
+                isLoading: false,
                 
                 // Form States
-                job: { url: '', title: '', min_plan: 1 },
-                plan: { 
+                jobForm: { url: '', title: '', min_plan: 1 },
+                planForm: { 
                     name: '', price: '', commission: '', daily_jobs: '', duration: '', 
                     min_active_referrals: 0, referral_percent: 0, rabat_percent: 0, 
                     thumbnail: '', return_capital: false 
                 },
                 
                 // Edit Modal State
-                editModal: { show: false, plan: {} },
+                editModal: { show: false, plan: {}, isEditing: false, originalPlanId: null },
 
                 init() {
                     if(!localStorage.getItem('token')) this.logout();
@@ -296,6 +300,7 @@
                 },
 
                 async fetchData() {
+                    this.isLoading = true;
                     try {
                         const token = localStorage.getItem('token');
                         const [planRes, jobRes, settingsRes] = await Promise.all([
@@ -307,26 +312,28 @@
                         if (planRes.status === 401 || jobRes.status === 401 || settingsRes.status === 401) { this.logout(); return; }
                         
                         this.plans = await planRes.json();
-                        this.jobs = await jobRes.json();
+                        this.jobs = await jobRes.json(); // Data Jobs diambil di sini
 
                         const s = await settingsRes.json();
                         if(s.l1) this.settings = s;
                         
                         // Set default min_plan for job creation
                         if (this.plans.length > 0) {
-                            this.job.min_plan = this.plans[0].id;
+                            this.jobForm.min_plan = this.plans[0].id;
                         }
 
                     } catch(e) {
                          this.showToast('Gagal memuat data.', 'error');
                          console.error(e);
+                    } finally {
+                        this.isLoading = false;
                     }
                 },
 
                 // --- API HELPERS ---
-                async api(body, method = 'POST') {
+                async api(body, method = 'POST', endpoint = '/api/admin') {
                     try {
-                        const res = await fetch('/api/admin', {
+                        const res = await fetch(endpoint, {
                             method: method,
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                             body: JSON.stringify(body)
@@ -343,54 +350,116 @@
                 },
 
                 // --- PLANS ACTIONS ---
-                async createPlan() {
-                    if(!this.plan.name || !this.plan.price) return this.showToast('Mohon lengkapi Nama dan Harga paket', 'error');
+                resetPlanForm() {
+                    this.planForm = { name: '', price: '', commission: '', daily_jobs: '', duration: '', min_active_referrals: 0, referral_percent: 0, rabat_percent: 0, thumbnail: '', return_capital: false };
+                    this.editModal.isEditing = false;
+                    this.editModal.originalPlanId = null;
+                },
 
-                    const payload = {
-                        ...this.plan,
-                        price: parseFloat(this.plan.price) || 0,
-                        commission: parseFloat(this.plan.commission) || 0,
-                        daily_jobs: parseInt(this.plan.daily_jobs) || 0,
-                        duration: parseInt(this.plan.duration) || 0,
-                        min_active_referrals: parseInt(this.plan.min_active_referrals) || 0,
-                        referral_percent: parseFloat(this.plan.referral_percent) || 0,
-                        rabat_percent: parseFloat(this.plan.rabat_percent) || 0,
+                editPlan(p) {
+                    this.planForm = {
+                        name: p.name,
+                        price: p.price,
+                        commission: p.commission,
+                        daily_jobs: p.daily_jobs_limit,
+                        duration: p.duration_days,
+                        min_active_referrals: p.min_active_referrals,
+                        referral_percent: p.referral_percent,
+                        rabat_percent: p.rabat_percent,
+                        thumbnail: p.thumbnail_url,
+                        return_capital: p.return_capital == 1
+                    };
+                    this.editModal.isEditing = true;
+                    // Salin data ke editModal.plan untuk diisi di form edit (Modal)
+                    this.editModal.plan = {
+                        id: p.id,
+                        name: p.name,
+                        price: p.price,
+                        commission: p.commission,
+                        daily_jobs_limit: p.daily_jobs_limit,
+                        duration_days: p.duration_days,
+                        min_active_referrals: p.min_active_referrals,
+                        referral_percent: p.referral_percent,
+                        rabat_percent: p.rabat_percent,
+                        thumbnail_url: p.thumbnail_url,
+                        return_capital: p.return_capital
                     };
 
-                    await this.api({ action: 'create_plan', ...payload });
-                    this.showToast('Paket Membership Berhasil Dibuat', 'success');
-                    this.fetchData(); // Refresh daftar plans
-                    // Reset form (opsional)
-                },
-                
-                openEditModal(p) {
-                    this.editModal.plan = p;
+                    this.editModal.originalPlanId = p.id;
                     this.editModal.show = true;
                 },
 
+                async createOrUpdatePlan() {
+                    if(!this.planForm.name || !this.planForm.price) return this.showToast('Mohon lengkapi Nama dan Harga paket', 'error');
+
+                    const payload = {
+                        ...this.planForm,
+                        price: parseFloat(this.planForm.price) || 0,
+                        commission: parseFloat(this.planForm.commission) || 0,
+                        daily_jobs: parseInt(this.planForm.daily_jobs) || 0,
+                        duration: parseInt(this.planForm.duration) || 0,
+                        min_active_referrals: parseInt(this.planForm.min_active_referrals) || 0,
+                        referral_percent: parseFloat(this.planForm.referral_percent) || 0,
+                        rabat_percent: parseFloat(this.planForm.rabat_percent) || 0,
+                        
+                        // Action specific
+                        action: 'create_plan',
+                    };
+
+                    await this.api(payload);
+                    this.showToast('Paket Membership Berhasil Dibuat', 'success');
+                    this.resetPlanForm();
+                    this.fetchData(); // Refresh daftar plans
+                },
+                
+                async updatePlan() {
+                    const p = this.editModal.plan;
+                    if(!p.name || !p.price) return this.showToast('Nama dan Harga wajib diisi', 'error');
+                    
+                    const payload = {
+                        action: 'update_plan',
+                        id: p.id,
+                        name: p.name,
+                        price: parseFloat(p.price) || 0,
+                        commission: parseFloat(p.commission) || 0,
+                        daily_jobs: parseInt(p.daily_jobs_limit) || 0,
+                        duration: parseInt(p.duration_days) || 0,
+                        min_active_referrals: parseInt(p.min_active_referrals) || 0,
+                        referral_percent: parseFloat(p.referral_percent) || 0,
+                        rabat_percent: parseFloat(p.rabat_percent) || 0,
+                        thumbnail: p.thumbnail_url,
+                        return_capital: p.return_capital
+                    };
+
+                    await this.api(payload);
+                    this.showToast('Paket berhasil di-update!', 'success');
+                    this.editModal.show = false;
+                    this.fetchData(); 
+                },
+
                 async deletePlan(id) {
-                    if(!confirm('Anda yakin ingin menghapus paket ini?')) return;
+                    if(!confirm('Anda yakin ingin menghapus paket ini? Tindakan tidak bisa dibatalkan.')) return;
                     await this.api({ action: 'delete_plan', id }, 'POST'); 
                     this.showToast('Paket berhasil dihapus!', 'success');
-                    this.fetchData(); // Refresh daftar plans
+                    this.fetchData(); 
                 },
 
                 // --- JOBS ACTIONS ---
                 async createJob() {
-                    if(!this.job.url || !this.job.title) return this.showToast('Mohon lengkapi data job', 'error');
+                    if(!this.jobForm.url || !this.jobForm.title) return this.showToast('Mohon lengkapi data job', 'error');
                     
-                    await this.api({ action: 'create_job', ...this.job });
+                    await this.api({ action: 'create_job', ...this.jobForm });
                     this.showToast('Video Misi Berhasil Ditambahkan', 'success');
-                    this.job.title = ''; 
-                    this.job.url = '';
-                    this.fetchData(); // Refresh daftar jobs
+                    this.jobForm.title = ''; 
+                    this.jobForm.url = '';
+                    this.fetchData(); 
                 },
                 
                 async deleteJob(id) {
                     if(!confirm('Anda yakin ingin menghapus misi ini?')) return;
                     await this.api({ action: 'delete_job', id }, 'POST'); 
                     this.showToast('Misi video berhasil dihapus!', 'success');
-                    this.fetchData(); // Refresh daftar jobs
+                    this.fetchData(); 
                 },
                 
                 // --- UTILS ---
