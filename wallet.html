@@ -6,7 +6,7 @@
     <title>Dompet - WatchJob</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = { theme: { extend: { colors: { primary: '#1e293b', gold: '#f59e0b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
@@ -62,22 +62,31 @@
         <div x-show="tab==='wd'" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
             <h3 class="font-bold text-slate-800 mb-4">Tarik Saldo</h3>
             
-            <!-- Tampilan Data Bank (Jika Ada) -->
-            <div x-if="bankInfo && bankInfo.account_number" class="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg mb-4 border border-blue-100" x-cloak>
-                <p class="font-bold mb-1">Rekening Tujuan:</p>
-                <p x-text="bankInfo.bank_name + ' - ' + bankInfo.account_number"></p>
-                <p x-text="bankInfo.account_name"></p>
+            <!-- Tampilan Data Bank (Conditional) -->
+            <div x-if="bankInfo && bankInfo.account_number">
+                <div class="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg mb-4 border border-blue-100">
+                    <p class="font-bold mb-1">Rekening Tujuan:</p>
+                    <p x-text="bankInfo.bank_name + ' - ' + bankInfo.account_number"></p>
+                    <p x-text="bankInfo.account_name"></p>
+                </div>
             </div>
             
             <!-- Pesan Error Bank (Jika Belum Ada) -->
-            <div x-if="!bankInfo || !bankInfo.account_number" class="p-3 bg-red-50 text-red-700 text-sm rounded-lg mb-4 border border-red-200" x-cloak>
-                <i class="fa-solid fa-triangle-exclamation mr-1"></i> Silahkan ikat akun bank anda di profile!
+            <div x-if="!bankInfo || !bankInfo.account_number">
+                 <div class="p-3 bg-red-50 text-red-700 text-sm rounded-lg mb-4 border border-red-200">
+                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> Silahkan ikat kartu bank anda di profile!
+                </div>
             </div>
             
 
             <div class="space-y-4">
                 <div><label class="text-xs font-bold text-slate-400">Jumlah (Min 50.000)</label><input x-model="wd.amount" type="number" class="w-full p-3 border rounded-xl mt-1 font-bold" placeholder="50000"></div>
-                <button @click="submitWd" :disabled="loading || !bankInfo || !bankInfo.account_number" class="w-full py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg">Tarik Uang</button>
+                
+                <!-- Tombol Tarik Uang (Disabled jika loading atau bank info kosong) -->
+                <button @click="submitWd" :disabled="loading || !bankInfo || !bankInfo.account_number" 
+                        class="w-full py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 transition">
+                    Tarik Uang
+                </button>
             </div>
         </div>
 
@@ -95,7 +104,7 @@
         function walletApp() {
             return {
                 tab: 'depo',
-                // KRITIS: Mengambil user dari storage manapun yang ada
+                // Mengambil user dari localStorage/sessionStorage yang ada (state yang working saat ini)
                 user: JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}'), 
                 bankInfo: null, // Diinisialisasi sebagai null, akan diisi di fetchUser
                 depo: { amount: '', method: 'Bank Transfer' },
@@ -130,7 +139,8 @@
                             
                             // 2. KRITIS: Update state AlpineJS
                             this.user = updatedUser;
-                            this.bankInfo = data.bank_info; // Simpan info bank dari API
+                            // bank_info diambil dari data.bank_info yang dikirim backend
+                            this.bankInfo = data.bank_info && data.bank_info.account_number ? data.bank_info : null; 
                             
                             // 3. Update storage (biar sinkron)
                             localStorage.setItem('user', JSON.stringify(updatedUser)); 
@@ -168,30 +178,27 @@
                         await this.api({ type: 'deposit', ...this.depo });
                         this.showModal('Deposit diajukan! Cek riwayat.');
                         this.depo.amount = '';
-                        // Setelah deposit diajukan (pending), refresh user untuk update data
                         await this.fetchUser();
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
                 },
 
                 async submitWd() {
-                    // KRITIS: Cek apakah data bank sudah ada
+                    // Cek apakah data bank sudah ada (BankInfo sudah dicek di template dan tombol disabled)
                     if (!this.bankInfo || !this.bankInfo.account_number) {
-                        this.showModal('Silahkan ikat akun bank anda di profile!');
+                        this.showModal('Silahkan ikat kartu bank anda di profile!');
                         return;
                     }
 
-                    if(this.wd.amount < 50000) return this.showModal('Minimal penarikan Rp 50.000.');
+                    if(this.wd.amount < 20000) return this.showModal('Minimal penarikan Rp 20.000.');
                     
                     this.loading = true;
                     try {
-                        // Backend handles balance check and bank info check
                         await this.api({ type: 'withdrawal', amount: this.wd.amount });
                         
                         this.showModal('Penarikan diproses! Cek riwayat.');
                         this.wd.amount = '';
                         
-                        // KRITIS: Refresh saldo setelah WD (saldo dikurangi instan)
                         await this.fetchUser(); 
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
