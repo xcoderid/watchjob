@@ -11,7 +11,10 @@
         tailwind.config = { theme: { extend: { colors: { primary: '#1e293b', gold: '#f59e0b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
-    <style>.aspect-video{aspect-ratio:16/9;}</style>
+    <style>
+        [x-cloak] { display: none !important; }
+        .aspect-video { aspect-ratio: 16 / 9; }
+    </style>
 </head>
 <body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="playerApp()" x-init="init()">
 
@@ -25,98 +28,243 @@
     <!-- CONTENT -->
     <main class="flex-1 overflow-y-auto p-5 space-y-5">
         
-        <!-- Video Container -->
-        <div class="bg-black rounded-2xl overflow-hidden shadow-xl relative aspect-video group">
-            <!-- Thumbnail -->
-            <div x-show="status === 'idle'" class="absolute inset-0 w-full h-full">
-                <img :src="job ? 'https://img.youtube.com/vi/'+getYtId(job.youtube_url)+'/hqdefault.jpg' : ''" class="w-full h-full object-cover opacity-80">
-                <div class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 hover:bg-black/40 transition" @click="play">
-                    <div class="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center shadow-lg"><i class="fa-solid fa-play text-white text-2xl pl-1"></i></div>
+        <!-- VIDEO AREA -->
+        <div class="bg-black rounded-2xl overflow-hidden shadow-xl relative aspect-video group bg-slate-900">
+            
+            <!-- 1. YouTube Iframe Container (API akan me-render di sini) -->
+            <div id="youtube-player" class="w-full h-full"></div>
+
+            <!-- 2. Custom Thumbnail & Play Button Overlay (Muncul sebelum play) -->
+            <div x-show="playerState === 'unstarted' || playerState === 'cued'" class="absolute inset-0 z-20 bg-black">
+                <img :src="job ? 'https://img.youtube.com/vi/'+getYtId(job.youtube_url)+'/hqdefault.jpg' : ''" class="w-full h-full object-cover opacity-60">
+                <div class="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/10 hover:bg-black/30 transition" @click="playVideo">
+                    <div class="w-16 h-16 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-2xl transform hover:scale-110 transition duration-300">
+                        <i class="fa-solid fa-play text-2xl ml-1"></i>
+                    </div>
+                </div>
+                <div class="absolute bottom-4 left-0 right-0 text-center">
+                    <p class="text-white text-sm font-bold shadow-black drop-shadow-md">Ketuk tombol Play untuk memulai</p>
                 </div>
             </div>
 
-            <!-- Iframe -->
-            <div x-show="status !== 'idle'" class="w-full h-full">
-                <iframe :src="status !== 'idle' ? 'https://www.youtube.com/embed/'+getYtId(job?.youtube_url)+'?autoplay=1&controls=0&playsinline=1' : ''" class="w-full h-full pointer-events-none"></iframe>
+            <!-- 3. Pause Overlay (Muncul saat video dipause atau tab tidak fokus) -->
+            <div x-show="(playerState === 'paused' && playerState !== 'unstarted') || (!isFocused && playerState === 'playing')" class="absolute inset-0 z-30 bg-black/80 flex flex-col items-center justify-center text-white backdrop-blur-sm" x-transition>
+                <i class="fa-solid fa-pause text-5xl mb-3 text-amber-400 animate-pulse"></i>
+                <p class="font-bold text-lg">Video Dijeda</p>
+                <p class="text-xs text-slate-300 mt-1">Lanjutkan menonton untuk menjalankan timer.</p>
+                <button @click="playVideo" class="mt-4 px-6 py-2 bg-white text-black rounded-full text-xs font-bold hover:bg-gray-200 transition">Lanjutkan</button>
             </div>
 
-            <!-- Pause Overlay -->
-            <div x-show="status === 'playing' && !isFocused" class="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-30">
-                <i class="fa-solid fa-pause text-4xl mb-2 opacity-50"></i>
-                <p class="font-bold">Dijeda</p>
-                <p class="text-xs text-slate-400">Jangan pindah tab!</p>
+            <!-- 4. Loading Indicator -->
+            <div x-show="isLoadingVideo" class="absolute inset-0 z-10 flex items-center justify-center bg-black text-white">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl"></i>
             </div>
         </div>
 
-        <!-- Info -->
+        <!-- INFO AREA -->
         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-            <h1 class="font-bold text-lg text-slate-900 leading-tight mb-3" x-text="job?.title || 'Memuat...'"></h1>
+            <h1 class="font-bold text-lg text-slate-900 leading-tight mb-1" x-text="job?.title || 'Memuat Data...'"></h1>
+            <p class="text-xs text-slate-500 mb-4">Tonton video ini sampai durasi habis untuk mendapatkan komisi.</p>
             
-            <div class="grid grid-cols-2 gap-3 mb-4">
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Estimasi Komisi</p>
-                    <p class="text-emerald-600 font-bold text-lg" x-text="fmtMoney(commission)"></p>
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-3 mb-5">
+                <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+                    <p class="text-[10px] text-emerald-600 uppercase font-bold mb-1">Komisi Anda</p>
+                    <p class="text-emerald-700 font-bold text-xl" x-text="fmtMoney(commission)"></p>
                 </div>
-                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Waktu Tonton</p>
-                    <p class="text-slate-800 font-bold text-lg" :class="timer > 0 ? 'text-amber-600' : 'text-emerald-600'" x-text="timer > 0 ? timer + ' Detik' : 'Selesai'"></p>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center relative overflow-hidden">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold mb-1">Sisa Durasi</p>
+                    <p class="font-bold text-xl" :class="timer > 0 ? 'text-amber-600' : 'text-emerald-600'" x-text="timer > 0 ? timer + 's' : 'Selesai'"></p>
+                    <!-- Progress Bar Background -->
+                    <div class="absolute bottom-0 left-0 h-1 bg-amber-500 transition-all duration-1000" :style="`width: ${(1 - timer/initialTimer) * 100}%`"></div>
                 </div>
             </div>
 
-            <button :disabled="timer > 0 || status !== 'done'" @click="claim" :class="(timer > 0 || status !== 'done') ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-primary text-white hover:bg-slate-800 shadow-lg'" class="w-full py-3 rounded-xl text-sm font-bold transition">
-                <span x-show="!loading" x-text="status === 'done' ? 'KLAIM KOMISI' : 'Tonton Sampai Habis'"></span>
-                <span x-show="loading"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
-            </button>
+            <!-- Commission Details -->
+            <div class="bg-blue-50 rounded-xl p-4 border border-blue-100 text-xs space-y-3 mb-5">
+                <div class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold text-blue-800 mb-1">Rincian Komisi:</p>
+                        <ul class="list-disc list-inside text-blue-700 space-y-1">
+                            <li><span class="font-bold">Member (Anda):</span> <span x-text="fmtMoney(commission)"></span> (Masuk Saldo Utama)</li>
+                            <li><span class="font-bold">Upline:</span> Mendapatkan rabat sesuai level paket upline.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col gap-3">
+                <!-- Tombol Klaim (Aktif saat timer 0) -->
+                <button 
+                    x-show="timer <= 0"
+                    @click="claim" 
+                    :disabled="isClaiming"
+                    class="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition transform active:scale-95 flex justify-center items-center gap-2 animate-pulse">
+                    <i x-show="!isClaiming" class="fa-solid fa-gift"></i>
+                    <span x-text="isClaiming ? 'Memproses...' : 'KLAIM KOMISI SEKARANG'"></span>
+                </button>
+
+                <!-- Status Menonton -->
+                <button 
+                    x-show="timer > 0"
+                    disabled
+                    class="w-full py-3.5 bg-slate-100 text-slate-400 rounded-xl font-bold text-sm cursor-not-allowed border border-slate-200">
+                    <span x-text="playerState === 'playing' ? 'Sedang Menonton...' : (playerState === 'paused' ? 'Video Dijeda' : 'Silakan Putar Video')"></span>
+                </button>
+
+                <a href="jobs.html" class="w-full py-3 border border-slate-200 text-slate-500 rounded-xl font-bold text-sm hover:bg-slate-50 text-center transition">Kembali ke Daftar Misi</a>
+            </div>
         </div>
 
     </main>
 
     <script>
+        // Youtube API Global Callback
+        var onYouTubeIframeAPIReady; 
+
         function playerApp() {
             return {
                 job: null,
                 commission: 0,
                 timer: 0,
-                status: 'idle', // idle, playing, done
+                initialTimer: 0,
+                player: null,
+                playerState: 'unstarted', // unstarted, playing, paused, buffering, cued
                 isFocused: true,
                 interval: null,
-                loading: false,
+                isClaiming: false,
+                isLoadingVideo: true,
                 
                 async init() {
+                    // 1. Cek Login
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     
+                    // 2. Ambil ID Job dari URL
                     const urlParams = new URLSearchParams(window.location.search);
                     const id = urlParams.get('id');
                     if(!id) return window.location.href = 'jobs.html';
 
-                    document.addEventListener("visibilitychange", () => { this.isFocused = !document.hidden; });
+                    // 3. Listener Visibility (Anti-Cheat Tab)
+                    document.addEventListener("visibilitychange", () => { 
+                        this.isFocused = !document.hidden;
+                        if (!this.isFocused && this.player && this.player.pauseVideo) {
+                            this.player.pauseVideo(); // Pause otomatis jika pindah tab
+                        }
+                    });
 
-                    // Fetch specific job data (Currently fetch all and find, ideal is endpoint for single job)
+                    // 4. Ambil Data Job dari Server
+                    await this.fetchJobData(id);
+
+                    // 5. Load YouTube API
+                    this.loadYoutubeAPI();
+                },
+
+                async fetchJobData(id) {
                     try {
                         const res = await fetch('/api/jobs', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
                         const data = await res.json();
                         this.job = data.jobs.find(j => j.id == id);
+                        
+                        if(!this.job) {
+                            alert('Job tidak ditemukan atau sudah kadaluarsa.');
+                            window.location.href = 'jobs.html';
+                            return;
+                        }
+
                         this.commission = data.user_commission;
-                        this.timer = this.job ? this.job.duration : 0;
-                        if(!this.job) alert('Job tidak ditemukan');
-                    } catch(e) { alert('Gagal memuat data'); }
+                        this.timer = this.job.duration;
+                        this.initialTimer = this.job.duration;
+                    } catch(e) { 
+                        alert('Gagal memuat data: ' + e.message);
+                        window.location.href = 'jobs.html';
+                    }
                 },
-                
-                play() {
-                    this.status = 'playing';
+
+                loadYoutubeAPI() {
+                    // Cek jika script API sudah ada
+                    if (!window.YT) {
+                        const tag = document.createElement('script');
+                        tag.src = "https://www.youtube.com/iframe_api";
+                        const firstScriptTag = document.getElementsByTagName('script')[0];
+                        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                    } else {
+                        this.initPlayer();
+                    }
+
+                    // Callback global dari YouTube API
+                    window.onYouTubeIframeAPIReady = () => {
+                        this.initPlayer();
+                    };
+                },
+
+                initPlayer() {
+                    if (!this.job) return;
+                    const videoId = this.getYtId(this.job.youtube_url);
+                    
+                    this.player = new YT.Player('youtube-player', {
+                        height: '100%',
+                        width: '100%',
+                        videoId: videoId,
+                        playerVars: {
+                            'playsinline': 1,
+                            'controls': 0, // Sembunyikan kontrol bawaan
+                            'rel': 0,
+                            'modestbranding': 1,
+                            'disablekb': 1,
+                            'fs': 0 // Disable fullscreen button
+                        },
+                        events: {
+                            'onReady': (event) => {
+                                this.isLoadingVideo = false;
+                                this.playerState = 'cued';
+                            },
+                            'onStateChange': (event) => this.onPlayerStateChange(event)
+                        }
+                    });
+                },
+
+                onPlayerStateChange(event) {
+                    // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+                    
+                    if (event.data == YT.PlayerState.PLAYING) {
+                        this.playerState = 'playing';
+                        this.startTimer();
+                    } else {
+                        // Jika paused, buffering, atau ended -> stop timer
+                        this.playerState = event.data == YT.PlayerState.PAUSED ? 'paused' : 'buffering';
+                        this.stopTimer();
+                    }
+                },
+
+                playVideo() {
+                    if (this.player && this.player.playVideo) {
+                        this.player.playVideo();
+                    }
+                },
+
+                startTimer() {
+                    if (this.interval) clearInterval(this.interval);
                     this.interval = setInterval(() => {
-                        if(this.isFocused && this.timer > 0) {
+                        // Timer jalan HANYA jika: window fokus AND timer > 0
+                        if (this.isFocused && this.timer > 0) {
                             this.timer--;
                         } else if (this.timer <= 0) {
-                            this.status = 'done';
-                            clearInterval(this.interval);
+                            this.stopTimer();
+                            // Opsional: Stop video jika timer habis
+                            // if (this.player.pauseVideo) this.player.pauseVideo();
                         }
                     }, 1000);
                 },
 
+                stopTimer() {
+                    if (this.interval) clearInterval(this.interval);
+                },
+
                 async claim() {
                     if(this.timer > 0) return;
-                    this.loading = true;
+                    this.isClaiming = true;
                     try {
                         const res = await fetch('/api/jobs', {
                             method: 'POST',
@@ -124,15 +272,27 @@
                             body: JSON.stringify({ action: 'claim', job_id: this.job.id })
                         });
                         const json = await res.json();
+                        
                         if(!res.ok) throw new Error(json.error);
                         
-                        alert(`Sukses! Komisi ${this.fmtMoney(json.reward)} diterima.`);
+                        // Tampilkan notifikasi sukses sederhana
+                        alert(`Sukses! Komisi ${this.fmtMoney(json.reward)} berhasil ditambahkan.`);
                         window.location.href = 'dashboard.html';
-                    } catch(e) { alert(e.message); } finally { this.loading = false; }
+                    } catch(e) { 
+                        alert(e.message); 
+                    } finally { 
+                        this.isClaiming = false; 
+                    }
                 },
 
-                getYtId(url) { const m = url?.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/); return (m && m[2].length === 11) ? m[2] : null; },
-                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+                getYtId(url) { 
+                    const m = url?.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/); 
+                    return (m && m[2].length === 11) ? m[2] : null; 
+                },
+                
+                fmtMoney(n) { 
+                    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); 
+                }
             }
         }
     </script>
