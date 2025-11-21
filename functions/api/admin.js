@@ -2,9 +2,9 @@ import { jsonResponse, getYoutubeId, authenticateUser, hashPassword, updateUserB
 
 /**
  * KRITIS: Memverifikasi user adalah Admin sebelum menjalankan endpoint ini
- * @param {object} env
- * @param {Request} request
- * @returns {Promise<object|null>}
+ * @param {object} env - Environment bindings
+ * @param {Request} request - Request object
+ * @returns {Promise<object|null>} - Data user jika terotentikasi dan role Admin
  */
 const authenticateAdmin = async (env, request) => {
     const user = await authenticateUser(env, request);
@@ -46,6 +46,7 @@ export async function onRequestGet(context) {
       const offset = (page - 1) * limit;
 
       let whereClause = '';
+      // Cari berdasarkan username (yang merupakan nomor HP)
       if (q) whereClause = `WHERE username LIKE '%${q}%'`;
 
       // Mengambil semua kolom (termasuk balance yang sudah ada)
@@ -87,7 +88,8 @@ export async function onRequestGet(context) {
         return jsonResponse(res.results);
     }
     if (type === 'info') {
-        const res = await env.DB.prepare('SELECT id, title, created_at FROM informations ORDER BY created_at DESC').all();
+        // Ambil semua informasi
+        const res = await env.DB.prepare('SELECT id, title, created_at, content FROM informations ORDER BY created_at DESC').all();
         return jsonResponse(res.results);
     }
 
@@ -104,6 +106,18 @@ export async function onRequestGet(context) {
         const plans = await env.DB.prepare('SELECT * FROM plans').all();
         return jsonResponse(plans.results);
     }
+    
+    if (type === 'jobs') {
+        // KRITIS: Mengambil data Jobs dan nama plan yang terkait
+        const jobs = await env.DB.prepare(`
+            SELECT j.*, p.name as plan_name 
+            FROM jobs j
+            JOIN plans p ON j.min_plan_level = p.id
+            ORDER BY j.created_at DESC
+        `).all();
+        return jsonResponse(jobs.results);
+    }
+
 
     return jsonResponse({ error: 'Unknown type' }, 400);
 
@@ -138,13 +152,20 @@ export async function onRequestPost(context) {
         if (!vidId) return jsonResponse({ error: 'URL Youtube tidak valid' }, 400);
 
         const cleanUrl = `https://www.youtube.com/watch?v=${vidId}`;
-        // Dapatkan durasi default dari plan ID yang dipilih (jika ada)
         const plan = await env.DB.prepare('SELECT watch_duration FROM plans WHERE id = ?').bind(min_plan).first();
         const duration = plan ? plan.watch_duration : 30;
 
         await env.DB.prepare('INSERT INTO jobs (title, youtube_url, duration, min_plan_level) VALUES (?, ?, ?, ?)').bind(title, cleanUrl, duration, min_plan).run();
         return jsonResponse({ success: true });
     }
+    
+    // HAPUS JOB
+    if (action === 'delete_job') {
+        const { id } = body;
+        await env.DB.prepare('DELETE FROM jobs WHERE id = ?').bind(id).run();
+        return jsonResponse({ success: true });
+    }
+
 
     if (action === 'create_plan') {
         const { name, price, duration, daily_jobs, commission, return_capital, thumbnail, min_active_referrals, referral_percent, rabat_percent } = body;
@@ -157,7 +178,28 @@ export async function onRequestPost(context) {
         
         return jsonResponse({ success: true });
     }
+
+    if (action === 'update_plan') {
+        const { id, name, price, duration, daily_jobs, commission, return_capital, thumbnail, min_active_referrals, referral_percent, rabat_percent } = body;
+        const watchDur = 30; // Watch duration tetap 30 atau ambil dari plan lama
+
+        await env.DB.prepare(`
+            UPDATE plans SET name=?, price=?, duration_days=?, daily_jobs_limit=?, commission=?, 
+            return_capital=?, thumbnail_url=?, min_active_referrals=?, referral_percent=?, rabat_percent=? 
+            WHERE id=?
+        `).bind(name, price, duration, daily_jobs, commission, return_capital ? 1 : 0, thumbnail, min_active_referrals, referral_percent, rabat_percent, id).run();
+        
+        return jsonResponse({ success: true });
+    }
     
+    // HAPUS PLAN
+    if (action === 'delete_plan') {
+        const { id } = body;
+        await env.DB.prepare('DELETE FROM plans WHERE id = ?').bind(id).run();
+        return jsonResponse({ success: true });
+    }
+
+
     // --- CS & INFO MANAGEMENT ---
     if (action === 'create_cs') {
         const { platform, type, name, url } = body;
