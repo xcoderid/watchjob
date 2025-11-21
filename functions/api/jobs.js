@@ -86,12 +86,11 @@ export async function onRequestPost(context) {
         ops.push(env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'income', ?, ?, 'success')`).bind(user.id, commission, `Reward: ${job?.title || 'Video'}`));
         await updateUserBalance(env, user.id, commission); // KRITIS: Update Saldo User
 
-        // 4. LOGIKA RABAT (Komisi Upline dari Tugas Downline)
-        // Rabat Tugas diambil dari SETTINGS GLOBAL
+        // 4. LOGIKA RABAT (Komisi Upline dari Tugas Downline) - MENGGUNAKAN SETTINGS GLOBAL
         if (user.referrer_id && sub.id !== 1) { // Downline bukan Trial
             const settingsRes = await env.DB.prepare("SELECT key, value FROM site_settings WHERE key LIKE 'affiliate_l%'").all();
-            const rates = { 'affiliate_l1': 10, 'affiliate_l2': 5, 'affiliate_l3': 2 }; 
-            if(settingsRes.results) { settingsRes.results.forEach(s => rates[s.key] = parseFloat(s.value)); }
+            const rates = { 'affiliate_l1': 0 }; // Rabat tugas hanya L1 yang penting, sisanya dari setting
+            if(settingsRes.results) { rates['affiliate_l1'] = parseFloat(settingsRes.results.find(s => s.key === 'affiliate_l1')?.value || 0); }
             
             const rabatRateL1 = rates['affiliate_l1'] || 0; // Menggunakan rate L1 sebagai rabat tugas L1
 
