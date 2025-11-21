@@ -16,11 +16,11 @@ export async function onRequestGet(context) {
   }
 
   try {
-    // KRITIS: Ambil user TERBARU dari DB untuk mendapatkan semua kolom baru
+    // Ambil user TERBARU dari DB untuk mendapatkan semua kolom baru
     const currentUser = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(id).first();
     if (!currentUser) return jsonResponse({ error: 'User not found' }, 404);
     
-    // FIX UTAMA: Menambahkan 'p.id' agar Frontend bisa membaca ID Plan saat ini
+    // Menambahkan 'p.id' agar Frontend bisa membaca ID Plan saat ini
     const activePlan = await env.DB.prepare(`
       SELECT p.id, p.name, p.daily_jobs_limit, p.commission, s.end_date
       FROM user_subscriptions s
@@ -29,9 +29,23 @@ export async function onRequestGet(context) {
     `).bind(id).first();
 
     // Tambah 7 jam manual agar tanggalnya berganti pas jam 00.00 WIB.
-    let now = new Date();
-    now.setHours(now.getHours() + 7);
-    const todayStart = new Date().toISOString().split('T')[0] + ' 00:00:00';
+    // 1. Ambil waktu server saat ini (UTC)
+    const now = new Date();
+    
+    // 2. Pura-pura jadi WIB (Tambah 7 Jam) untuk menentukan "ini tanggal berapa di Indo?"
+    const wibOffset = 7 * 60 * 60 * 1000;
+    const wibDate = new Date(now.getTime() + wibOffset);
+    
+    // 3. Reset jamnya menjadi 00:00:00 (Awal Hari WIB)
+    wibDate.setUTCHours(0, 0, 0, 0);
+    
+    // 4. Kembalikan ke UTC agar cocok dengan data di Database D1
+    // (00:00 WIB = 17:00 UTC hari kemarin)
+    const dbQueryDate = new Date(wibDate.getTime() - wibOffset);
+    
+    // 5. Jadikan String SQL (YYYY-MM-DD HH:MM:SS)
+    const todayStart = dbQueryDate.toISOString().replace('T', ' ').split('.')[0];
+    // --------------------------------------------
     
     // Ambil Statistik Hari Ini
     const stats = await env.DB.prepare(`
