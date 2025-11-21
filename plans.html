@@ -8,12 +8,73 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script>
-        tailwind.config = { theme: { extend: { colors: { primary: '#1e293b', gold: '#f59e0b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+        tailwind.config = { 
+            theme: { 
+                extend: { 
+                    colors: { 
+                        primary: '#1e293b', 
+                        gold: '#f59e0b', 
+                        accent: '#3b82f6' 
+                    }, 
+                    fontFamily: { sans: ['Inter', 'sans-serif'] } 
+                } 
+            } 
+        }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
-    <style>[x-cloak]{display:none}</style>
+    <style>
+        [x-cloak] { display: none !important; }
+        .modal-enter { animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
 </head>
 <body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="plansApp()" x-init="init()">
+
+    <!-- CUSTOM MODAL (Confirmation & Alert) -->
+    <div class="fixed inset-0 z-[100] flex items-center justify-center px-4" x-show="modal.show" x-cloak>
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
+             x-show="modal.show"
+             x-transition:enter="transition ease-out duration-300" 
+             x-transition:enter-start="opacity-0" 
+             x-transition:enter-end="opacity-100"></div>
+        
+        <!-- Card -->
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 text-center modal-enter"
+             x-show="modal.show">
+            
+            <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" 
+                 :class="modal.type === 'confirm' ? 'bg-blue-50 text-blue-600' : (modal.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600')">
+                <i class="fa-solid text-2xl" :class="modal.type === 'confirm' ? 'fa-question' : (modal.type === 'error' ? 'fa-circle-xmark' : 'fa-check')"></i>
+            </div>
+            
+            <h3 class="text-xl font-bold text-slate-900 mb-2" x-text="modal.title"></h3>
+            <p class="text-sm text-slate-500 mb-6 leading-relaxed" x-text="modal.message"></p>
+            
+            <div class="flex gap-3">
+                <button x-show="modal.type === 'confirm'" 
+                        @click="modal.show = false" 
+                        class="flex-1 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition">
+                    Batal
+                </button>
+                <button @click="handleConfirm" 
+                        class="flex-1 py-3 rounded-xl font-bold text-sm text-white shadow-lg transition"
+                        :class="modal.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-slate-800'">
+                    <span x-text="modal.type === 'confirm' ? 'Ya, Beli' : 'OK'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING OVERLAY -->
+    <div class="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm" x-show="isLoading" x-cloak>
+        <div class="bg-white p-4 rounded-full shadow-xl">
+            <i class="fa-solid fa-circle-notch fa-spin text-primary text-2xl"></i>
+        </div>
+    </div>
 
     <!-- HEADER -->
     <header class="h-16 bg-white border-b flex items-center px-6 shrink-0 z-20">
@@ -21,27 +82,60 @@
     </header>
 
     <!-- CONTENT -->
-    <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-4">
+    <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-5">
         <template x-for="p in plans" :key="p.id">
-            <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative">
-                <div class="h-28 bg-slate-800 relative">
-                     <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60" onerror="this.style.display='none'">
-                     <div class="absolute bottom-0 left-0 p-4"><h3 class="text-white font-bold text-xl" x-text="p.name"></h3></div>
+            <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative group">
+                <div class="h-32 bg-slate-800 relative overflow-hidden">
+                     <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60 transition duration-700 group-hover:scale-105" onerror="this.style.display='none'">
+                     <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
+                     <div class="absolute bottom-0 left-0 p-5">
+                         <p class="text-slate-300 text-[10px] font-bold uppercase tracking-wider mb-1">Membership</p>
+                         <h3 class="text-white font-bold text-2xl" x-text="p.name"></h3>
+                     </div>
                 </div>
                 <div class="p-5">
-                     <div class="flex justify-between items-end mb-4">
-                         <div><p class="text-xs text-slate-400 font-bold uppercase">Harga Paket</p><p class="text-2xl font-bold text-primary" x-text="fmtMoney(p.price)"></p></div>
-                         <div class="text-right"><span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded border border-emerald-100" x-text="p.duration_days + ' Hari'"></span></div>
+                     <div class="flex justify-between items-end mb-5">
+                         <div>
+                             <p class="text-xs text-slate-400 font-bold uppercase mb-1">Harga Paket</p>
+                             <p class="text-2xl font-bold text-primary" x-text="fmtMoney(p.price)"></p>
+                         </div>
+                         <div class="text-right">
+                             <span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-emerald-100 flex items-center gap-1">
+                                 <i class="fa-regular fa-calendar"></i> <span x-text="p.duration_days + ' Hari'"></span>
+                             </span>
+                         </div>
                      </div>
+                     
                      <div class="grid grid-cols-2 gap-3 mb-5 text-xs">
-                        <div class="bg-slate-50 p-2 rounded border border-slate-100 text-center"><p class="text-slate-400">Misi Harian</p><p class="font-bold text-base" x-text="p.daily_jobs_limit"></p></div>
-                        <div class="bg-slate-50 p-2 rounded border border-slate-100 text-center"><p class="text-slate-400">Komisi/Misi</p><p class="font-bold text-base" x-text="fmtMoney(p.commission)"></p></div>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                            <p class="text-slate-400 mb-1">Misi Harian</p>
+                            <p class="font-bold text-base text-slate-800" x-text="p.daily_jobs_limit + ' Video'"></p>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                            <p class="text-slate-400 mb-1">Komisi/Misi</p>
+                            <p class="font-bold text-base text-emerald-600" x-text="fmtMoney(p.commission)"></p>
+                        </div>
                      </div>
-                     <div x-show="p.return_capital" class="mb-4 text-[10px] text-amber-600 font-bold flex items-center gap-1"><i class="fa-solid fa-rotate-left"></i> Jaminan Modal Kembali</div>
-                     <button @click="buyPlan(p)" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg">Aktifkan Paket</button>
+                     
+                     <div x-show="p.return_capital" class="mb-5 p-3 bg-amber-50 rounded-xl border border-amber-100 flex items-center gap-3">
+                         <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-amber-600"><i class="fa-solid fa-rotate-left"></i></div>
+                         <div>
+                             <p class="text-[10px] text-amber-800 font-bold uppercase">Jaminan Modal</p>
+                             <p class="text-xs text-amber-600">Modal kembali 100% di akhir.</p>
+                         </div>
+                     </div>
+
+                     <button @click="confirmBuy(p)" class="w-full py-3.5 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200 transition transform active:scale-95">
+                         Aktifkan Paket Ini
+                     </button>
                 </div>
             </div>
         </template>
+
+        <div x-show="plans.length === 0 && !isLoading" class="p-10 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <i class="fa-solid fa-box-open text-3xl mb-3 opacity-50"></i>
+            <p class="text-sm">Belum ada paket tersedia.</p>
+        </div>
     </main>
 
     <!-- NAV -->
@@ -57,29 +151,85 @@
         function plansApp() {
             return {
                 plans: [],
+                isLoading: false,
+                modal: { show: false, title: '', message: '', type: 'info', callback: null },
+                selectedPlan: null,
+
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     this.fetchPlans();
                 },
+
                 async fetchPlans() {
-                    const res = await fetch('/api/plans', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-                    this.plans = await res.json();
+                    this.isLoading = true;
+                    try {
+                        const res = await fetch('/api/plans', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                        this.plans = await res.json();
+                    } catch(e) {
+                        console.error(e);
+                    } finally {
+                        this.isLoading = false;
+                    }
                 },
-                async buyPlan(p) {
-                    if(!confirm(`Beli ${p.name}? Saldo akan terpotong.`)) return;
+
+                // 1. Tampilkan Modal Konfirmasi
+                confirmBuy(p) {
+                    this.selectedPlan = p;
+                    this.modal = {
+                        show: true,
+                        type: 'confirm',
+                        title: 'Konfirmasi Pembelian',
+                        message: `Anda akan membeli paket ${p.name} seharga ${this.fmtMoney(p.price)}. Saldo akan terpotong otomatis. Lanjutkan?`,
+                        callback: this.processBuy
+                    };
+                },
+
+                // 2. Eksekusi Pembelian saat tombol "Ya" diklik
+                async processBuy() {
+                    this.modal.show = false; // Tutup modal konfirmasi
+                    this.isLoading = true;   // Tampilkan loading
+                    
                     try {
                         const res = await fetch('/api/plans', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({ plan_id: p.id })
+                            body: JSON.stringify({ plan_id: this.selectedPlan.id })
                         });
+                        
                         const json = await res.json();
+                        
                         if(!res.ok) throw new Error(json.error);
-                        alert(json.message);
-                        window.location.href = 'dashboard.html';
-                    } catch(e) { alert(e.message); }
+                        
+                        // Tampilkan Modal Sukses
+                        this.showModal('success', 'Pembelian Berhasil!', json.message, () => {
+                            window.location.href = 'dashboard.html';
+                        });
+
+                    } catch(e) {
+                        // Tampilkan Modal Error
+                        this.showModal('error', 'Gagal Membeli', e.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
                 },
-                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+
+                // Helper untuk menampilkan modal info/error/sukses
+                showModal(type, title, message, callback = null) {
+                    this.modal = { show: true, type, title, message, callback };
+                },
+
+                // Handler tombol di dalam modal
+                handleConfirm() {
+                    if (this.modal.callback) {
+                        this.modal.callback.call(this); // Execute callback
+                    } else {
+                        this.modal.show = false; // Just close
+                    }
+                },
+
+                fmtMoney(n) { 
+                    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); 
+                }
             }
         }
     </script>
