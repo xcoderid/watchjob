@@ -340,7 +340,8 @@
     </template>
 
     <!-- MAIN APP -->
-    <div class="flex flex-col h-full max-w-lg mx-auto bg-white shadow-2xl relative" x-show="token && user">
+    <!-- PERBAIKAN: Mengganti max-w-lg menjadi max-w-md untuk proporsi yang lebih baik pada mobile -->
+    <div class="flex flex-col h-full max-w-md mx-auto bg-white shadow-2xl relative" x-show="token && user">
         
         <!-- TOP BAR -->
         <header class="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 z-20" x-show="view!=='player'">
