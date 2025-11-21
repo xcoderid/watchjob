@@ -93,15 +93,6 @@
                         <div><label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label><input x-model="planForm.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30"></div>
                         <div><label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label><input x-model="planForm.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0"></div>
 
-                        <!-- Commission Settings -->
-                        <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-2">
-                            <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Pengaturan Komisi Upline</p>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label><input x-model="planForm.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
-                                <div><label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label><input x-model="planForm.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0"></div>
-                            </div>
-                        </div>
-
                         <!-- Appearance -->
                         <div class="col-span-2"><label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label><input x-model="planForm.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://..."></div>
                     </div>
@@ -111,7 +102,7 @@
                         <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
                     </div>
 
-                    <button @click="createOrUpdatePlan" class="w-full py-3" :class="editModal.isEditing ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'" :disabled="isLoading">
+                    <button @click="createOrUpdatePlan" class="w-full py-3 text-white rounded-xl font-bold text-sm transition" :class="editModal.isEditing ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'" :disabled="isLoading">
                         <span x-text="editModal.isEditing ? 'SIMPAN PERUBAHAN' : 'SIMPAN PAKET BARU'"></span>
                     </button>
 
@@ -128,7 +119,7 @@
                                 <tr>
                                     <th class="p-3">Nama/Harga</th>
                                     <th class="p-3">Komisi/Limit</th>
-                                    <th class="p-3">Ref L1/Rabat</th>
+                                    <th class="p-3">Ref Aktif/Durasi</th>
                                     <th class="p-3 text-right">Aksi</th>
                                 </tr>
                             </thead>
@@ -144,8 +135,8 @@
                                             <p class="text-xs text-slate-500" x-text="p.daily_jobs_limit + ' Jobs / Hari'"></p>
                                         </td>
                                         <td class="p-3">
-                                            <p class="font-bold text-blue-600" x-text="p.referral_percent + '%'"></p>
-                                            <p class="text-xs text-slate-500" x-text="p.rabat_percent + '% Rabat'"></p>
+                                            <p class="font-bold text-blue-600" x-text="p.min_active_referrals + ' Ref Aktif'"></p>
+                                            <p class="text-xs text-slate-500" x-text="p.duration_days + ' Hari'"></p>
                                         </td>
                                         <td class="p-3 text-right">
                                             <button @click="editPlan(p)" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
@@ -249,11 +240,8 @@
                 <div><label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label><input x-model="editModal.plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm"></div>
                 
                 <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Komisi Upline</p>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[10px] text-slate-400 block mb-1">Upgrade (%)</label><input x-model="editModal.plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center"></div>
-                        <div><label class="text-[10px] text-slate-400 block mb-1">Rabat Tugas (%)</label><input x-model="editModal.plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center"></div>
-                    </div>
+                    <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Komisi Upline (Global Settings)</p>
+                    <p class="text-xs text-slate-400">Nilai komisi referral/rabat diatur di halaman Settings umum, bukan di sini.</p>
                 </div>
 
                 <div class="col-span-2">
@@ -287,7 +275,10 @@
                 jobForm: { url: '', title: '', min_plan: 1 },
                 planForm: { 
                     name: '', price: '', commission: '', daily_jobs: '', duration: '', 
-                    min_active_referrals: 0, referral_percent: 0, rabat_percent: 0, 
+                    min_active_referrals: 0, 
+                    // Kolom ini dihapus dari form karena diatur secara GLOBAL
+                    // referral_percent: 0, 
+                    // rabat_percent: 0, 
                     thumbnail: '', return_capital: false 
                 },
                 
@@ -312,7 +303,7 @@
                         if (planRes.status === 401 || jobRes.status === 401 || settingsRes.status === 401) { this.logout(); return; }
                         
                         this.plans = await planRes.json();
-                        this.jobs = await jobRes.json(); // Data Jobs diambil di sini
+                        this.jobs = await jobRes.json(); 
 
                         const s = await settingsRes.json();
                         if(s.l1) this.settings = s;
@@ -351,12 +342,14 @@
 
                 // --- PLANS ACTIONS ---
                 resetPlanForm() {
-                    this.planForm = { name: '', price: '', commission: '', daily_jobs: '', duration: '', min_active_referrals: 0, referral_percent: 0, rabat_percent: 0, thumbnail: '', return_capital: false };
+                    // Reset form dengan kolom yang benar (tanpa persentase)
+                    this.planForm = { name: '', price: '', commission: '', daily_jobs: '', duration: '', min_active_referrals: 0, thumbnail: '', return_capital: false };
                     this.editModal.isEditing = false;
                     this.editModal.originalPlanId = null;
                 },
 
                 editPlan(p) {
+                    // Isi form utama untuk edit (menggunakan kolom yang benar)
                     this.planForm = {
                         name: p.name,
                         price: p.price,
@@ -364,13 +357,12 @@
                         daily_jobs: p.daily_jobs_limit,
                         duration: p.duration_days,
                         min_active_referrals: p.min_active_referrals,
-                        referral_percent: p.referral_percent,
-                        rabat_percent: p.rabat_percent,
                         thumbnail: p.thumbnail_url,
                         return_capital: p.return_capital == 1
                     };
                     this.editModal.isEditing = true;
-                    // Salin data ke editModal.plan untuk diisi di form edit (Modal)
+                    
+                    // Isi modal edit dengan data lengkap (termasuk persentase lama untuk ditampilkan di modal jika perlu)
                     this.editModal.plan = {
                         id: p.id,
                         name: p.name,
@@ -379,6 +371,7 @@
                         daily_jobs_limit: p.daily_jobs_limit,
                         duration_days: p.duration_days,
                         min_active_referrals: p.min_active_referrals,
+                        // Menampilkan nilai lama meskipun tidak digunakan lagi untuk update di Plan
                         referral_percent: p.referral_percent,
                         rabat_percent: p.rabat_percent,
                         thumbnail_url: p.thumbnail_url,
@@ -399,12 +392,14 @@
                         daily_jobs: parseInt(this.planForm.daily_jobs) || 0,
                         duration: parseInt(this.planForm.duration) || 0,
                         min_active_referrals: parseInt(this.planForm.min_active_referrals) || 0,
-                        referral_percent: parseFloat(this.planForm.referral_percent) || 0,
-                        rabat_percent: parseFloat(this.planForm.rabat_percent) || 0,
                         
                         // Action specific
                         action: this.editModal.isEditing ? 'update_plan' : 'create_plan',
-                        id: this.editModal.isEditing ? this.editModal.originalPlanId : null
+                        id: this.editModal.isEditing ? this.editModal.originalPlanId : null,
+                        
+                        // KRITIS: Kirimkan nilai default 0 untuk persentase lama agar tidak error di DB
+                        referral_percent: 0,
+                        rabat_percent: 0,
                     };
 
                     await this.api(payload);
@@ -426,10 +421,12 @@
                         daily_jobs: parseInt(p.daily_jobs_limit) || 0,
                         duration: parseInt(p.duration_days) || 0,
                         min_active_referrals: parseInt(p.min_active_referrals) || 0,
-                        referral_percent: parseFloat(p.referral_percent) || 0,
-                        rabat_percent: parseFloat(p.rabat_percent) || 0,
                         thumbnail: p.thumbnail_url,
-                        return_capital: p.return_capital
+                        return_capital: p.return_capital,
+                        
+                        // KRITIS: Set 0 untuk kolom persentase lama di DB
+                        referral_percent: 0,
+                        rabat_percent: 0,
                     };
 
                     await this.api(payload);
