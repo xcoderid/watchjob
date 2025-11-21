@@ -111,7 +111,7 @@
         </main>
     </div>
 
-    <!-- ACTION MODAL -->
+    <!-- ACTION MODAL (Input Pass/Balance/Role) -->
     <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] flex items-center justify-center p-4" x-show="modal.visible" x-transition x-cloak>
         <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl transform transition-all scale-100">
             <div class="p-4 border-b bg-slate-50 flex justify-between items-center">
@@ -209,12 +209,11 @@
                 },
                 
                 openConfirm(actionType, user) {
-                    const status = user.status === 'active' ? 'Ban' : 'Unban';
                     this.confirmModal = {
                         visible: true,
-                        title: actionType === 'ban' ? `${status} User Ini?` : `Konfirmasi Aksi`,
+                        title: actionType === 'ban' ? (user.status === 'active' ? 'Ban User Ini?' : 'Aktifkan User Ini?') : 'Konfirmasi Aksi',
                         message: actionType === 'ban' 
-                            ? `Yakin ingin ${status.toLowerCase()} user ${user.username}? Status akan berubah menjadi ${status.toLowerCase()}.`
+                            ? `Yakin ingin ${user.status === 'active' ? 'membanned' : 'mengaktifkan'} user ${this.formatPhone(user.username)}?`
                             : `Lanjutkan aksi ini?`,
                         action: actionType,
                         user: user
@@ -236,7 +235,7 @@
                             });
                             const json = await res.json();
                             if(json.error) throw new Error(json.error);
-                            this.showToast(`Status user berhasil diubah.`, 'success');
+                            this.showToast(`Status user ${this.formatPhone(u.username)} berhasil diubah.`, 'success');
                             this.fetchUsers(this.page);
                         } catch(e) { this.showToast(e.message, 'error'); }
                     }
@@ -251,11 +250,13 @@
                         return;
                     }
                     
-                    // Logic untuk Balance, Pass, Role (aksi yang butuh input)
-                    
                     let type = 'change_pass';
                     if(this.modal.action === 'balance') type = 'adjust_balance';
                     if(this.modal.action === 'role') type = 'set_role';
+
+                    if ((this.modal.action !== 'role') && !this.actionValue) {
+                        return this.showToast('Input nilai/password wajib diisi.', 'error');
+                    }
                     
                     try {
                         const res = await fetch('/api/admin', {
