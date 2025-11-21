@@ -26,6 +26,14 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="contentApp()" x-init="init()">
 
+    <!-- TOAST NOTIFICATION -->
+    <div class="fixed top-5 right-5 z-[60] transition-all duration-300" x-show="toast.show" x-transition x-cloak>
+        <div class="bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-xl font-bold flex items-center gap-3">
+            <i class="fa-solid fa-circle-check"></i>
+            <span x-text="toast.msg"></span>
+        </div>
+    </div>
+
     <!-- MOBILE OVERLAY -->
     <div class="fixed inset-0 bg-black/50 z-30 md:hidden" x-show="sidebarOpen" @click="sidebarOpen=false" x-transition x-cloak></div>
 
@@ -57,89 +65,132 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
             
-            <!-- ADD JOB -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
-                <h3 class="font-bold text-lg mb-4 text-slate-800">Tambah Video Misi</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Link Youtube</label>
-                        <input x-model="job.url" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="https://youtube.com/...">
+            <!-- FORM SECTION -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- ADD JOB -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
+                    <h3 class="font-bold text-lg mb-4 text-slate-800">Tambah Video Misi</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Link Youtube</label>
+                            <input x-model="job.url" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="https://youtube.com/...">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Judul Video</label>
+                            <input x-model="job.title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="Judul Video">
+                        </div>
+                        <button @click="createJob" class="w-full py-3 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition">Posting Job Baru</button>
                     </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 uppercase block mb-1">Judul Video</label>
-                        <input x-model="job.title" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none transition" placeholder="Judul Video">
-                    </div>
-                    <button @click="createJob" class="w-full py-3 bg-primary hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition">Posting Job Baru</button>
                 </div>
-            </div>
 
-            <!-- ADD PLAN -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h3 class="font-bold text-lg mb-4 text-slate-800">Buat Paket Membership</h3>
-                
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <!-- Basic Info -->
-                    <div class="col-span-2 md:col-span-1">
-                        <label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label>
-                        <input x-model="plan.name" class="w-full p-2 border rounded-lg text-sm" placeholder="VIP 1">
-                    </div>
-                    <div class="col-span-2 md:col-span-1">
-                        <label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label>
-                        <input x-model="plan.price" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
-                    </div>
+                <!-- ADD PLAN -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-lg mb-4 text-slate-800">Buat Paket Membership</h3>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <!-- Basic Info -->
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Nama Paket</label>
+                            <input x-model="plan.name" class="w-full p-2 border rounded-lg text-sm" placeholder="VIP 1">
+                        </div>
+                        <div class="col-span-2 md:col-span-1">
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Harga (IDR)</label>
+                            <input x-model="plan.price" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
+                        </div>
 
-                    <!-- Income Logic -->
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label>
-                        <input x-model="plan.commission" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label>
-                        <input x-model="plan.daily_jobs" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="5">
-                    </div>
+                        <!-- Income Logic -->
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Komisi per Video</label>
+                            <input x-model="plan.commission" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Limit Harian</label>
+                            <input x-model="plan.daily_jobs" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="5">
+                        </div>
 
-                    <!-- Constraints -->
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label>
-                        <input x-model="plan.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label>
-                        <input x-model="plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
-                    </div>
+                        <!-- Constraints -->
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Durasi (Hari)</label>
+                            <input x-model="plan.duration" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="30">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-400 block mb-1">Min. Referral Aktif</label>
+                            <input x-model="plan.min_active_referrals" type="number" class="w-full p-2 border rounded-lg text-sm" placeholder="0">
+                        </div>
 
-                    <!-- Commission Settings -->
-                    <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-2">
-                        <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Pengaturan Komisi Upline</p>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label>
-                                <input x-model="plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0">
+                        <!-- Commission Settings -->
+                        <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100 mt-2">
+                            <p class="text-xs font-bold text-slate-500 mb-2 uppercase">Pengaturan Komisi Upline</p>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-[10px] text-slate-400 block mb-1">Komisi Upgrade (%)</label>
+                                    <input x-model="plan.referral_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label>
+                                    <input x-model="plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0">
+                                </div>
                             </div>
-                            <div>
-                                <label class="text-[10px] text-slate-400 block mb-1">Komisi Rabat Tugas (%)</label>
-                                <input x-model="plan.rabat_percent" type="number" class="w-full p-2 border rounded-lg text-sm text-center" placeholder="0">
-                            </div>
+                        </div>
+
+                        <!-- Appearance -->
+                        <div class="col-span-2">
+                            <label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label>
+                            <input x-model="plan.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://...">
                         </div>
                     </div>
 
-                    <!-- Appearance -->
-                    <div class="col-span-2">
-                        <label class="text-xs font-bold text-slate-400 block mb-1">URL Gambar Thumbnail</label>
-                        <input x-model="plan.thumbnail" class="w-full p-2 border rounded-lg text-sm" placeholder="https://...">
+                    <div class="flex items-center gap-2 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer" @click="plan.return_capital = !plan.return_capital">
+                        <div class="w-5 h-5 border-2 rounded flex items-center justify-center transition" :class="plan.return_capital ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'">
+                            <i x-show="plan.return_capital" class="fa-solid fa-check text-white text-xs"></i>
+                        </div>
+                        <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
                     </div>
-                </div>
 
-                <div class="flex items-center gap-2 mb-6 bg-slate-50 p-3 rounded-lg border border-slate-100 cursor-pointer" @click="plan.return_capital = !plan.return_capital">
-                    <div class="w-5 h-5 border-2 rounded flex items-center justify-center transition" :class="plan.return_capital ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'">
-                        <i x-show="plan.return_capital" class="fa-solid fa-check text-white text-xs"></i>
-                    </div>
-                    <span class="text-sm font-bold text-slate-600">Modal Kembali di Akhir Periode?</span>
+                    <button @click="createPlan" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Paket Baru</button>
                 </div>
-
-                <button @click="createPlan" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg transition">Simpan Paket Baru</button>
+            </div>
+            
+            <!-- LIST PLANS (NEW SECTION) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden lg:col-span-2">
+                <div class="p-4 bg-slate-50 border-b font-bold text-sm text-slate-600 uppercase tracking-wider">Daftar Paket Membership</div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left">
+                        <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-[10px]">
+                            <tr>
+                                <th class="p-3">Nama/Harga</th>
+                                <th class="p-3">Komisi/Limit</th>
+                                <th class="p-3">Ref L1/Rabat</th>
+                                <th class="p-3 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <template x-for="p in plans" :key="p.id">
+                                <tr class="hover:bg-slate-50/50">
+                                    <td class="p-3">
+                                        <p class="font-bold" x-text="p.name"></p>
+                                        <p class="text-xs text-primary font-mono" x-text="fmtMoney(p.price)"></p>
+                                    </td>
+                                    <td class="p-3">
+                                        <p class="font-bold text-emerald-600" x-text="fmtMoney(p.commission)"></p>
+                                        <p class="text-xs text-slate-500" x-text="p.daily_jobs_limit + ' Jobs / Hari'"></p>
+                                    </td>
+                                    <td class="p-3">
+                                        <p class="font-bold text-blue-600" x-text="p.referral_percent + '%'"></p>
+                                        <p class="text-xs text-slate-500" x-text="p.rabat_percent + '% Rabat'"></p>
+                                    </td>
+                                    <td class="p-3 text-right">
+                                        <button @click="editPlan(p)" class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                                        <button @click="deletePlan(p.id)" class="w-8 h-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="plans.length === 0"><td colspan="4" class="p-8 text-center text-slate-400 italic">Belum ada paket membership dibuat.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
         </main>
@@ -152,61 +203,95 @@
             <span x-text="toast.msg"></span>
         </div>
     </div>
+    
+    <!-- MODAL EDIT PLAN (Untuk Tugas Selanjutnya) -->
+    <div x-show="editModal.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" x-cloak>
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6">
+            <h3 class="font-bold text-lg mb-4">Edit Paket: <span x-text="editModal.plan.name"></span></h3>
+            <p class="text-sm text-slate-500 mb-4">Fitur edit akan diimplementasikan pada langkah selanjutnya.</p>
+            <button @click="editModal.show = false" class="py-2 px-4 bg-primary text-white rounded">Tutup</button>
+        </div>
+    </div>
+
 
     <script>
         function contentApp() {
             return {
                 sidebarOpen: false,
                 toast: { show: false, msg: '' },
+                plans: [], // State untuk daftar plans
                 
-                // Forms Data
+                // Form States
                 job: { url: '', title: '', min_plan: 1 },
                 plan: { 
                     name: '', price: '', commission: '', daily_jobs: '', duration: '', 
                     min_active_referrals: 0, referral_percent: 0, rabat_percent: 0, 
                     thumbnail: '', return_capital: false 
                 },
+                
+                // Edit Modal State
+                editModal: { show: false, plan: {} },
 
                 init() {
                     if(!localStorage.getItem('token')) window.location.href='/index.html';
+                    this.fetchData();
                 },
 
-                async api(body) {
+                async fetchData() {
+                    try {
+                        const [planRes, jobRes] = await Promise.all([
+                            fetch('/api/admin?type=plans', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+                            fetch('/api/admin?type=jobs', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }) // Assuming jobs API exists
+                        ]);
+                        
+                        if (planRes.status === 401 || jobRes.status === 401) { this.logout(); return; }
+                        
+                        this.plans = await planRes.json();
+                        // this.jobs = await jobRes.json(); // Data jobs tidak diperlukan di sini, hanya plans
+                        
+                        // Set default min_plan for job creation
+                        if (this.plans.length > 0) {
+                            this.job.min_plan = this.plans[0].id;
+                        }
+
+                    } catch(e) {
+                         this.showToast('Gagal memuat data plans/jobs.', 'error');
+                         console.error(e);
+                    }
+                },
+
+                // --- API HELPERS ---
+                async api(body, method = 'POST') {
                     try {
                         const res = await fetch('/api/admin', {
-                            method: 'POST', 
-                            headers: {
-                                'Content-Type':'application/json', 
-                                'Authorization': `Bearer ${localStorage.getItem('token')}`
-                            },
+                            method: method,
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                             body: JSON.stringify(body)
                         });
                         
                         if(res.status === 401) this.logout();
-                        
                         const json = await res.json();
                         if(!res.ok) throw new Error(json.error);
                         return json;
                     } catch(e) {
-                        alert(e.message);
+                        this.showToast(e.message, 'error');
                         throw e;
                     }
                 },
 
+                // --- ACTIONS ---
                 async createJob() {
-                    if(!this.job.url || !this.job.title) return alert('Mohon lengkapi data job');
+                    if(!this.job.url || !this.job.title) return this.showToast('Mohon lengkapi data job', 'error');
                     
                     await this.api({ action: 'create_job', ...this.job });
-                    
-                    this.showToast('Video Misi Berhasil Ditambahkan');
+                    this.showToast('Video Misi Berhasil Ditambahkan', 'success');
                     this.job.title = ''; 
                     this.job.url = '';
                 },
 
                 async createPlan() {
-                    if(!this.plan.name || !this.plan.price) return alert('Mohon lengkapi data paket');
+                    if(!this.plan.name || !this.plan.price) return this.showToast('Mohon lengkapi Nama dan Harga paket', 'error');
 
-                    // Ensure numbers are parsed correctly
                     const payload = {
                         ...this.plan,
                         price: parseFloat(this.plan.price) || 0,
@@ -219,18 +304,34 @@
                     };
 
                     await this.api({ action: 'create_plan', ...payload });
-                    
-                    this.showToast('Paket Membership Berhasil Dibuat');
-                    // Reset form optional
+                    this.showToast('Paket Membership Berhasil Dibuat', 'success');
+                    this.fetchData(); // Refresh daftar plans
+                    // Reset form (opsional)
+                },
+                
+                editPlan(p) {
+                    // Hanya menampilkan modal placeholder
+                    this.editModal.plan = p;
+                    this.editModal.show = true;
                 },
 
+                async deletePlan(id) {
+                    if(!confirm('Anda yakin ingin menghapus paket ini?')) return;
+                    await this.api({ action: 'delete_plan', id }, 'POST'); // Asumsi API Admin mendukung delete_plan
+                    this.showToast('Paket berhasil dihapus!', 'success');
+                    this.fetchData(); // Refresh daftar plans
+                },
+
+                // --- UTILS ---
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
+                
                 logout() { 
                     localStorage.clear(); 
                     window.location.href = '/index.html'; 
                 },
 
-                showToast(msg) {
-                    this.toast = { show: true, msg };
+                showToast(msg, type = 'success') {
+                    this.toast = { show: true, msg, type };
                     setTimeout(() => this.toast.show = false, 3000);
                 }
             }
