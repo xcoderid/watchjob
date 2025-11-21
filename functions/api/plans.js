@@ -75,26 +75,29 @@ export async function onRequestPost(context) {
       ops.push(env.DB.prepare("INSERT INTO user_subscriptions (user_id, plan_id, end_date, status) VALUES (?, ?, ?, 'active')").bind(userId, plan.id, end.toISOString()));
 
       // 4. LOGIKA KOMISI REFERRAL (Untuk Upline)
-      // Syarat: User yang upgrade bukan Trial (plan.id != 1)
+      // Komisi Referral diambil dari SETTINGS GLOBAL (L1, L2, L3)
       if (user.referrer_id && plan.id !== 1) {
           
           const settingsRes = await env.DB.prepare("SELECT key, value FROM site_settings WHERE key LIKE 'affiliate_l%'").all();
+          // Gunakan rates default jika setting kosong
           const rates = { 'affiliate_l1': 10, 'affiliate_l2': 5, 'affiliate_l3': 2 }; 
           if(settingsRes.results) { settingsRes.results.forEach(s => rates[s.key] = parseFloat(s.value)); }
 
-          // L1: Langsung Upline
-          const l1 = await env.DB.prepare('SELECT id, referrer_id, balance, username FROM users WHERE id = ?').bind(user.referrer_id).first();
+          // --- Level 1 (Direct Upline) ---
+          const l1 = await env.DB.prepare('SELECT id, referrer_id, username FROM users WHERE id = ?').bind(user.referrer_id).first();
           if (l1) {
              const uplinePlan = await env.DB.prepare(`
-                SELECT p.referral_percent, p.price as upline_plan_price 
+                SELECT p.price as upline_plan_price 
                 FROM user_subscriptions s 
                 JOIN plans p ON s.plan_id = p.id 
                 WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
              `).bind(l1.id).first();
              
-             if (uplinePlan && uplinePlan.referral_percent > 0) {
-                 // Komisi L1
-                 let commissionL1 = (finalPrice * uplinePlan.referral_percent) / 100;
+             // Pastikan upline memiliki paket aktif (untuk capping)
+             if (uplinePlan) { 
+                 const referralRate = rates['affiliate_l1'] || 0;
+                 let commissionL1 = (finalPrice * referralRate) / 100;
+                 
                  // Capping: Maksimal komisi tidak boleh melebihi harga paket Upline
                  if (commissionL1 > uplinePlan.upline_plan_price) { commissionL1 = uplinePlan.upline_plan_price; }
 
@@ -103,27 +106,48 @@ export async function onRequestPost(context) {
                      await updateUserBalance(env, l1.id, commissionL1); // KRITIS: Update Saldo Upline L1
                  }
 
-                 // L2: Upline Level 2
+                 // --- Level 2 ---
                  if (l1.referrer_id) {
-                     const l2 = await env.DB.prepare('SELECT id, balance FROM users WHERE id = ?').bind(l1.referrer_id).first();
+                     const l2 = await env.DB.prepare('SELECT id, referrer_id FROM users WHERE id = ?').bind(l1.referrer_id).first();
                      const uplineL2Plan = await env.DB.prepare(`
-                        SELECT p.referral_percent, p.price as upline_plan_price 
+                        SELECT p.price as upline_plan_price 
                         FROM user_subscriptions s JOIN plans p ON s.plan_id = p.id 
                         WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
                      `).bind(l2.id).first();
 
-                     if (l2 && uplineL2Plan && (rates['affiliate_l2'] || 0) > 0) {
-                         let commissionL2 = (finalPrice * (rates['affiliate_l2'] || 0)) / 100;
+                     if (l2 && uplineL2Plan) {
+                         const referralRateL2 = rates['affiliate_l2'] || 0;
+                         let commissionL2 = (finalPrice * referralRateL2) / 100;
                          if (commissionL2 > uplineL2Plan.upline_plan_price) { commissionL2 = uplineL2Plan.upline_plan_price; }
 
                          if (commissionL2 > 0) {
                              ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l2.id, commissionL2, `Refferal L2 dari ${user.username}`));
                              await updateUserBalance(env, l2.id, commissionL2); // KRITIS: Update Saldo Upline L2
                          }
+                         
+                         // --- Level 3 ---
+                         if (l2.referrer_id) {
+                             const l3 = await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(l2.referrer_id).first();
+                             const uplineL3Plan = await env.DB.prepare(`
+                                SELECT p.price as upline_plan_price 
+                                FROM user_subscriptions s JOIN plans p ON s.plan_id = p.id 
+                                WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
+                             `).bind(l3.id).first();
+
+                             if (l3 && uplineL3Plan) {
+                                 const referralRateL3 = rates['affiliate_l3'] || 0;
+                                 let commissionL3 = (finalPrice * referralRateL3) / 100;
+                                 if (commissionL3 > uplineL3Plan.upline_plan_price) { commissionL3 = uplineL3Plan.upline_plan_price; }
+                                 
+                                 if (commissionL3 > 0) {
+                                     ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l3.id, commissionL3, `Refferal L3 dari ${user.username}`));
+                                     await updateUserBalance(env, l3.id, commissionL3); // KRITIS: Update Saldo Upline L3
+                                 }
+                             }
+                         }
                      }
                  }
-                 // Logic L3 Dihapus untuk menghindari SQL Injection kompleks dan nested updates, namun logic serupa dapat ditambahkan jika diperlukan.
-             }
+              }
           }
       }
 
