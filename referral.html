@@ -19,7 +19,7 @@
         <h1 class="font-bold text-lg text-slate-800">Tim Saya</h1>
     </header>
 
-    <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-6">
+    <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-6" x-data="{ lvl: 'l1' }">
         <div class="bg-white p-5 rounded-2xl shadow-sm border text-center">
             <p class="text-xs text-slate-400 font-bold uppercase mb-2">Kode Undangan</p>
             <div @click="copy" class="bg-slate-50 border-2 border-dashed border-slate-200 p-3 rounded-xl font-mono font-bold text-xl cursor-pointer hover:bg-slate-100 transition flex justify-center gap-3">
@@ -27,6 +27,31 @@
             </div>
         </div>
 
+        <!-- Commission Scheme Section (Settings Global) -->
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b border-slate-100 bg-slate-50/50"><h3 class="font-bold text-xs uppercase text-slate-500">Skema Komisi Afiliasi Global</h3></div>
+            <div class="p-4 space-y-4">
+                
+                <!-- Referral Upgrade -->
+                <div class="border-b pb-3"><p class="font-bold text-sm text-primary">Komisi Referral Upgrade (Member Beli Paket)</p></div>
+                <div class="grid grid-cols-3 text-center text-sm font-bold">
+                    <div>L1: <span class="text-emerald-600" x-text="settings.l1+'%'">0%</span></div>
+                    <div>L2: <span class="text-emerald-600" x-text="settings.l2+'%'">0%</span></div>
+                    <div>L3: <span class="text-emerald-600" x-text="settings.l3+'%'">0%</span></div>
+                </div>
+
+                <!-- Rabat Tugas -->
+                <div class="border-b pb-3 pt-3"><p class="font-bold text-sm text-primary">Rabat Tugas (Downline Selesaikan Misi)</p></div>
+                <div class="grid grid-cols-3 text-center text-sm font-bold">
+                    <div>L1: <span class="text-emerald-600" x-text="settings.rabat_l1+'%'">0%</span></div>
+                    <div>L2: <span class="text-emerald-600" x-text="settings.rabat_l2+'%'">0%</span></div>
+                    <div>L3: <span class="text-emerald-600" x-text="settings.rabat_l3+'%'">0%</span></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Team List Section -->
         <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
             <div class="flex border-b">
                 <button @click="lvl='l1'" :class="lvl==='l1'?'border-b-2 border-primary text-primary':'text-slate-400'" class="flex-1 py-3 text-xs font-bold transition">Level 1</button>
@@ -40,7 +65,8 @@
                         <template x-for="r in data[lvl]" :key="r.id">
                             <tr>
                                 <td class="p-3 font-bold" x-text="r.username"></td>
-                                <td class="p-3 text-slate-500" x-show="lvl!=='l1'" x-text="r.upline"></td>
+                                <!-- KRITIS: Upline hanya ditampilkan di L2 dan L3 -->
+                                <td class="p-3 text-slate-500" x-show="lvl!=='l1'" x-text="r.upline || 'N/A'"></td>
                                 <td class="p-3 text-right text-slate-400 text-[10px]" x-text="new Date(r.created_at).toLocaleDateString()"></td>
                             </tr>
                         </template>
@@ -51,12 +77,13 @@
         </div>
     </main>
 
+
     <nav class="bg-white border-t flex justify-around items-center h-20 shrink-0 z-40 pb-4 text-slate-400">
         <a href="dashboard.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">Beranda</span></a>
         <a href="jobs.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-play-circle text-xl"></i><span class="text-[10px] font-bold">Misi</span></a>
         <a href="plans.html" class="relative -top-6 bg-primary text-white w-16 h-16 rounded-full shadow-xl flex items-center justify-center border-4 border-slate-50"><i class="fa-solid fa-gem text-2xl"></i></a>
         <a href="wallet.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-wallet text-xl"></i><span class="text-[10px] font-bold">Dompet</span></a>
-        <a href="profile.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">Profil</span></a>
+        <a href="profile.html" class="flex flex-col items-center w-16 gap-1 nav-item active"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">Profil</span></a>
     </nav>
 
     <script>
@@ -65,15 +92,51 @@
                 lvl: 'l1',
                 data: { l1: [], l2: [], l3: [] },
                 refCode: '',
+                // Inisialisasi state settings dengan key yang benar
+                settings: { affiliate_l1: 0, affiliate_l2: 0, affiliate_l3: 0, rabat_l1: 0, rabat_l2: 0, rabat_l3: 0 }, 
+                
                 async init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
-                    const u = JSON.parse(localStorage.getItem('user'));
-                    this.refCode = u.referral_code;
-                    const res = await fetch(`/api/users?id=${u.id}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
-                    const json = await res.json();
-                    this.data = json.referrals;
+                    await this.fetchData();
                 },
-                copy() { navigator.clipboard.writeText(this.refCode); alert('Disalin!'); }
+
+                async fetchData() {
+                    try {
+                        const u = JSON.parse(localStorage.getItem('user'));
+                        const token = localStorage.getItem('token');
+
+                        // Fetch data user (yang juga mengembalikan referrals dan settings)
+                        const res = await fetch(`/api/users?id=${u.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                        
+                        if (res.status === 401) { this.logout(); return; }
+                        
+                        const userJson = await res.json();
+                        
+                        // 1. Update Referral Data
+                        this.data = userJson.referrals;
+                        this.refCode = userJson.user.referral_code;
+
+                        // 2. Update Settings dari payload API
+                        // Kita asumsikan API /api/users mengembalikan settings di field `settings`
+                        if (userJson.settings) {
+                            this.settings = {
+                                l1: userJson.settings.affiliate_l1 || 0,
+                                l2: userJson.settings.affiliate_l2 || 0,
+                                l3: userJson.settings.affiliate_l3 || 0,
+                                rabat_l1: userJson.settings.rabat_l1 || 0,
+                                rabat_l2: userJson.settings.rabat_l2 || 0,
+                                rabat_l3: userJson.settings.rabat_l3 || 0,
+                            };
+                        }
+
+                    } catch(e) {
+                         console.error("Error fetching referral data:", e);
+                    }
+                },
+                
+                copy() { navigator.clipboard.writeText(this.refCode); alert('Disalin!'); },
+                
+                logout() { localStorage.clear(); window.location.href = 'index.html'; }
             }
         }
     </script>
