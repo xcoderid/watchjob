@@ -150,7 +150,10 @@
                     </select>
                 </div>
 
-                <button @click="submitAction" class="w-full mt-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg transition">Konfirmasi & Simpan</button>
+                <button @click="submitAction" :disabled="isSubmitting" class="w-full mt-6 py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg transition">
+                    <span x-show="!isSubmitting">Konfirmasi & Simpan</span>
+                    <span x-show="isSubmitting"><i class="fa-solid fa-circle-notch fa-spin"></i> Memproses...</span>
+                </button>
             </div>
         </div>
     </div>
@@ -177,6 +180,7 @@
                 modal: { visible: false, user: null, action: '' }, actionValue: '',
                 toast: { show: false, msg: '', type: 'success' },
                 confirmModal: { visible: false, title: '', message: '', action: null, user: null },
+                isSubmitting: false, // Tambahkan state loading
                 
                 async init() {
                     if(!localStorage.getItem('token')) return window.location.href='/index.html';
@@ -257,6 +261,16 @@
                     if ((this.modal.action !== 'role') && !this.actionValue) {
                         return this.showToast('Input nilai/password wajib diisi.', 'error');
                     }
+
+                    // Tambahkan validasi numerik untuk adjust_balance
+                    if (type === 'adjust_balance') {
+                        const amount = parseFloat(this.actionValue);
+                        if (isNaN(amount) || amount === 0) {
+                             return this.showToast('Nominal saldo tidak valid.', 'error');
+                        }
+                    }
+                    
+                    this.isSubmitting = true; // NEW: Aktifkan loading
                     
                     try {
                         const res = await fetch('/api/admin', {
@@ -270,7 +284,11 @@
                         this.showToast('Aksi berhasil diterapkan!', 'success');
                         this.modal.visible = false; 
                         this.fetchUsers(this.page);
-                    } catch(e) { this.showToast(e.message, 'error'); }
+                    } catch(e) { 
+                        this.showToast(e.message, 'error'); 
+                    } finally {
+                        this.isSubmitting = false; // NEW: Matikan loading
+                    }
                 },
                 
                 logout() { localStorage.clear(); window.location.href = '/index.html'; },
