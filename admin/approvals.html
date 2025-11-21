@@ -7,49 +7,87 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a', emerald: { 500: '#10b981', 600: '#059669' } }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
-    <style>[x-cloak]{display:none}</style>
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="approvalApp()" x-init="init()">
 
-    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
-        <div class="h-16 flex items-center px-6 border-b border-slate-100"><span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span></div>
+    <!-- TOAST NOTIFICATION -->
+    <div class="fixed top-5 right-5 z-[60] transition-all duration-300" x-show="toast.show" x-transition x-cloak>
+        <div :class="toast.type==='error'?'bg-red-600':'bg-emerald-600'" class="text-white px-6 py-3 rounded-xl shadow-xl font-bold flex items-center gap-3">
+            <i class="fa-solid" :class="toast.type==='error'?'fa-triangle-exclamation':'fa-circle-check'"></i>
+            <span x-text="toast.msg"></span>
+        </div>
+    </div>
+
+    <!-- MOBILE OVERLAY -->
+    <div class="fixed inset-0 bg-black/50 z-30 md:hidden" x-show="sidebarOpen" @click="sidebarOpen=false" x-transition x-cloak></div>
+
+    <!-- SIDEBAR -->
+    <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed md:static inset-y-0 left-0 w-64 bg-white border-r border-slate-200 z-40 transition-transform duration-300 md:translate-x-0 flex flex-col shadow-2xl md:shadow-none">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100">
+            <span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span>
+        </div>
         <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
             <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
             <a href="dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
             <a href="users.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-users w-5 text-center"></i> Data Users</a>
             <a href="approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
+            
             <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
             <a href="content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
+            <a href="info.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-bullhorn w-5 text-center"></i> Info & CS</a>
             <a href="settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
         </nav>
         <div class="p-4 border-t border-slate-100"><button @click="logout" class="w-full py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-50 transition">Keluar</button></div>
     </aside>
 
+    <!-- CONTENT -->
     <div class="flex-1 flex flex-col overflow-hidden">
-        <header class="h-16 bg-white border-b border-slate-200 flex items-center px-8">
-            <h2 class="text-lg font-bold text-slate-800">Persetujuan Transaksi</h2>
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8">
+            <div class="flex items-center gap-4">
+                <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-slate-600 text-xl"><i class="fa-solid fa-bars"></i></button>
+                <h2 class="text-lg font-bold text-slate-800">Persetujuan Transaksi</h2>
+            </div>
+            <div class="text-xs font-bold bg-orange-50 text-orange-600 px-3 py-1 rounded-full">Pending Review</div>
         </header>
 
-        <main class="flex-1 overflow-y-auto p-8">
+        <main class="flex-1 overflow-y-auto p-4 md:p-8">
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 <template x-for="tx in txs" :key="tx.id">
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="px-2 py-1 rounded text-[10px] font-bold uppercase" :class="tx.type==='deposit'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'" x-text="tx.type"></span>
-                            <span class="text-[10px] text-slate-400" x-text="new Date(tx.created_at).toLocaleDateString()"></span>
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition">
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider" :class="tx.type==='deposit'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'" x-text="tx.type"></span>
+                            <span class="text-[10px] text-slate-400 font-medium" x-text="new Date(tx.created_at).toLocaleString()"></span>
                         </div>
-                        <h3 class="font-bold text-lg text-slate-800 mb-1" x-text="fmtMoney(tx.amount)"></h3>
-                        <p class="text-xs font-bold text-slate-500 mb-3" x-text="tx.username"></p>
-                        <p class="text-xs text-slate-400 bg-slate-50 p-2 rounded mb-4" x-text="tx.description"></p>
+                        
+                        <h3 class="font-bold text-xl text-slate-800 mb-1 font-mono" x-text="fmtMoney(tx.amount)"></h3>
+                        
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs text-slate-500"><i class="fa-solid fa-user"></i></div>
+                            <p class="text-sm font-bold text-slate-600" x-text="formatPhone(tx.username)"></p>
+                        </div>
+
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-4">
+                            <p class="text-xs text-slate-500 break-all" x-text="tx.description"></p>
+                        </div>
+
                         <div class="flex gap-2">
-                            <button @click="process(tx.id, 'approve')" class="flex-1 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600">TERIMA</button>
-                            <button @click="process(tx.id, 'reject')" class="flex-1 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-red-100 hover:text-red-600">TOLAK</button>
+                            <button @click="process(tx.id, 'approve')" class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-check"></i> TERIMA
+                            </button>
+                            <button @click="process(tx.id, 'reject')" class="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-xmark"></i> TOLAK
+                            </button>
                         </div>
                     </div>
                 </template>
-                <div x-show="txs.length===0" class="col-span-full p-12 text-center text-slate-400 border border-dashed rounded-2xl">Tidak ada transaksi pending.</div>
+                
+                <div x-show="txs.length === 0" class="col-span-full p-12 text-center bg-white rounded-2xl border border-dashed border-slate-300 text-slate-400">
+                    <i class="fa-solid fa-clipboard-check text-4xl mb-3 text-slate-200"></i>
+                    <p class="font-medium">Tidak ada transaksi yang perlu diproses saat ini.</p>
+                </div>
             </div>
         </main>
     </div>
@@ -57,26 +95,79 @@
     <script>
         function approvalApp() {
             return {
+                sidebarOpen: false,
+                token: localStorage.getItem('token'),
+                user: JSON.parse(localStorage.getItem('user') || 'null'),
                 txs: [],
+                toast: { show: false, msg: '', type: 'success' },
+
                 async init() {
-                    if(!localStorage.getItem('token')) return window.location.href='/index.html';
-                    this.load();
+                    if(!this.token || this.user?.role !== 'admin') {
+                        window.location.href = '/index.html';
+                        return;
+                    }
+                    await this.load();
                 },
+
                 async load() {
-                    const res = await fetch('/api/admin?type=pending_tx', { headers: {'Authorization': `Bearer ${localStorage.getItem('token')}`} });
-                    this.txs = await res.json();
+                    try {
+                        const res = await fetch('/api/admin?type=pending_tx', { 
+                            headers: {'Authorization': `Bearer ${this.token}`} 
+                        });
+                        
+                        if(res.status === 401) this.logout();
+                        
+                        const json = await res.json();
+                        if(json.error) throw new Error(json.error);
+                        
+                        this.txs = json;
+                    } catch(e) { 
+                        console.error(e);
+                        this.showToast(e.message, 'error');
+                    }
                 },
+
                 async process(id, dec) {
-                    if(!confirm(dec==='approve'?'Terima?':'Tolak?')) return;
-                    await fetch('/api/admin', {
-                        method: 'POST',
-                        headers: {'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}`},
-                        body: JSON.stringify({ action: 'process_tx', tx_id: id, decision: dec })
-                    });
-                    this.load();
+                    if(!confirm(dec === 'approve' ? 'Setujui Transaksi ini?' : 'Tolak Transaksi ini?')) return;
+                    
+                    try {
+                        const res = await fetch('/api/admin', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type':'application/json', 
+                                'Authorization': `Bearer ${this.token}`
+                            },
+                            body: JSON.stringify({ action: 'process_tx', tx_id: id, decision: dec })
+                        });
+
+                        const json = await res.json();
+                        if(json.error) throw new Error(json.error);
+
+                        this.showToast(`Transaksi berhasil di-${dec === 'approve' ? 'setujui' : 'tolak'}`);
+                        this.load(); // Refresh list
+                    } catch(e) {
+                        this.showToast(e.message, 'error');
+                    }
                 },
-                logout() { localStorage.clear(); window.location.href = '/index.html'; },
-                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+
+                logout() { 
+                    localStorage.clear(); 
+                    window.location.href = '/index.html'; 
+                },
+
+                fmtMoney(n) { 
+                    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); 
+                },
+                
+                formatPhone(p) { 
+                    if(!p) return '-';
+                    return p.startsWith('62') ? '+' + p : p; 
+                },
+
+                showToast(msg, type='success') {
+                    this.toast = { show: true, msg, type };
+                    setTimeout(() => this.toast.show = false, 3000);
+                }
             }
         }
     </script>
