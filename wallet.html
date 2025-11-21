@@ -33,7 +33,7 @@
 
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-6">
         
-        <!-- BALANCE CARD (Salod terbaru harus ditampilkan di sini) -->
+        <!-- BALANCE CARD (Saldo terbaru diambil dari fetchUser) -->
         <div class="bg-primary rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
             <div class="relative z-10">
                 <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Saldo Tersedia</p>
@@ -82,7 +82,7 @@
         function walletApp() {
             return {
                 tab: 'depo',
-                // Menggunakan localStorage/sessionStorage yang ada di browser saat init
+                // Mengambil user dari localStorage/sessionStorage yang ada (state yang working saat ini)
                 user: JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}'), 
                 depo: { amount: '', method: 'Bank Transfer' },
                 wd: { amount: '' },
@@ -90,8 +90,8 @@
                 modal: { show: false, message: '' },
                 
                 async init() {
-                    // Cek Sesi (menggunakan token di localStorage sebagai fallback utama Anda)
-                    if(!localStorage.getItem('token')) return this.logout();
+                    // Cek Sesi
+                    if(!localStorage.getItem('token') && !sessionStorage.getItem('token')) return this.logout();
                     
                     const urlParams = new URLSearchParams(window.location.search);
                     if(urlParams.get('tab')) this.tab = urlParams.get('tab');
@@ -105,7 +105,9 @@
                     if (!userId) return this.logout();
 
                     try {
-                        const token = localStorage.getItem('token'); // Menggunakan token yang ada
+                        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+                        
+                        // Fetch data user terbaru dari database
                         const res = await fetch(`/api/users?id=${userId}`, { 
                             headers: { 'Authorization': `Bearer ${token}` } 
                         });
@@ -115,10 +117,10 @@
                             
                             const updatedUser = data.user;
 
-                            // 2. Update state AlpineJS (INI PENTING untuk re-render saldo)
+                            // 2. KRITIS: Update state AlpineJS (Saldo akan ter-render)
                             this.user = updatedUser;
 
-                            // 3. Update storage (biar dashboard juga sinkron)
+                            // 3. Update storage (untuk sinkronisasi di halaman lain)
                             if (localStorage.getItem('token')) {
                                 localStorage.setItem('user', JSON.stringify(updatedUser)); 
                             } else if (sessionStorage.getItem('token')) {
@@ -140,7 +142,7 @@
                 },
 
                 async api(body) {
-                    const token = localStorage.getItem('token'); // Menggunakan token dari storage
+                    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
                     const res = await fetch('/api/transactions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -184,7 +186,7 @@
                 
                 logout() { 
                     localStorage.clear(); 
-                    sessionStorage.clear(); // Bersihkan keduanya untuk berjaga-jaga
+                    sessionStorage.clear(); 
                     window.location.href = 'index.html'; 
                 }
             }
