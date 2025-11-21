@@ -35,34 +35,17 @@
 
     <!-- CUSTOM MODAL (Confirmation & Alert) -->
     <div class="fixed inset-0 z-[100] flex items-center justify-center px-4" x-show="modal.show" x-cloak>
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
-             x-show="modal.show"
-             x-transition:enter="transition ease-out duration-300" 
-             x-transition:enter-start="opacity-0" 
-             x-transition:enter-end="opacity-100"></div>
-        
-        <!-- Card -->
-        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 text-center modal-enter"
-             x-show="modal.show">
-            
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="if(modal.type!=='confirm') modal.show=false"></div>
+        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 text-center modal-enter">
             <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" 
                  :class="modal.type === 'confirm' ? 'bg-blue-50 text-blue-600' : (modal.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600')">
                 <i class="fa-solid text-2xl" :class="modal.type === 'confirm' ? 'fa-question' : (modal.type === 'error' ? 'fa-circle-xmark' : 'fa-check')"></i>
             </div>
-            
             <h3 class="text-xl font-bold text-slate-900 mb-2" x-text="modal.title"></h3>
             <p class="text-sm text-slate-500 mb-6 leading-relaxed" x-text="modal.message"></p>
-            
             <div class="flex gap-3">
-                <button x-show="modal.type === 'confirm'" 
-                        @click="modal.show = false" 
-                        class="flex-1 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition">
-                    Batal
-                </button>
-                <button @click="handleConfirm" 
-                        class="flex-1 py-3 rounded-xl font-bold text-sm text-white shadow-lg transition"
-                        :class="modal.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-slate-800'">
+                <button x-show="modal.type === 'confirm'" @click="modal.show = false" class="flex-1 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition">Batal</button>
+                <button @click="handleConfirm" class="flex-1 py-3 rounded-xl font-bold text-sm text-white shadow-lg transition" :class="modal.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-slate-800'">
                     <span x-text="modal.type === 'confirm' ? 'Ya, Beli' : 'OK'"></span>
                 </button>
             </div>
@@ -85,14 +68,21 @@
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-5">
         
         <!-- TAMPILAN SALDO USER -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Saldo Anda Saat Ini</p>
-            <p class="font-bold text-2xl text-primary" x-text="fmtMoney(userBalance || 0)"></p>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center">
+            <div>
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Saldo Anda</p>
+                <p class="font-bold text-2xl text-primary" x-text="fmtMoney(userBalance || 0)"></p>
+            </div>
+            <div class="text-right">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Level Saat Ini</p>
+                <span class="bg-primary/10 text-primary px-3 py-1 rounded-lg text-xs font-bold" x-text="'ID: ' + currentPlanId"></span>
+            </div>
         </div>
         
         <template x-for="p in plans" :key="p.id">
             <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative group"
-                 :class="!canBuy(p.id) || userBalance < p.price ? 'opacity-70 grayscale' : ''">
+                 :class="isButtonDisabled(p) ? 'opacity-80 grayscale-[0.5]' : ''">
+                
                 <div class="h-32 bg-slate-800 relative overflow-hidden">
                      <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60 transition duration-700 group-hover:scale-105" onerror="this.style.display='none'">
                      <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
@@ -101,6 +91,7 @@
                          <h3 class="text-white font-bold text-2xl" x-text="p.name"></h3>
                      </div>
                 </div>
+
                 <div class="p-5">
                      <div class="flex justify-between items-end mb-5">
                          <div>
@@ -133,11 +124,12 @@
                          </div>
                      </div>
 
+                     <!-- LOGIKA TOMBOL YANG DIPERBAIKI -->
                      <button @click="confirmBuy(p)" 
-                             :disabled="!canBuy(p.id) || userBalance < p.price"
-                             class="w-full py-3.5 rounded-xl font-bold text-sm transition transform active:scale-95"
-                             :class="canBuy(p.id) && userBalance >= p.price ? 'bg-primary text-white hover:bg-slate-800 shadow-lg shadow-slate-200' : 'bg-slate-300 text-slate-500 cursor-not-allowed'">
-                         <span x-text="getButtonText(p.id, p.price)"></span>
+                             :disabled="isButtonDisabled(p)"
+                             class="w-full py-3.5 rounded-xl font-bold text-sm transition transform active:scale-95 border"
+                             :class="getButtonClass(p)">
+                         <span x-text="getButtonText(p)"></span>
                      </button>
                 </div>
             </div>
@@ -166,7 +158,7 @@
                 modal: { show: false, title: '', message: '', type: 'info', callback: null },
                 selectedPlan: null,
                 userBalance: 0, 
-                currentPlanId: 0, // ID Plan user yang sedang aktif
+                currentPlanId: 0,
                 
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
@@ -179,63 +171,69 @@
                         const token = localStorage.getItem('token');
                         const user = JSON.parse(localStorage.getItem('user'));
 
-                        // 1. Ambil data user terbaru (WAJIB untuk saldo dan current plan ID)
                         const userRes = await fetch(`/api/users?id=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
                         const userData = await userRes.json();
                         
-                        // Sinkronisasi data user
-                        this.userBalance = userData.user.balance;
+                        this.userBalance = parseFloat(userData.user.balance) || 0;
+                        // Pastikan ID diparsing ke Integer
+                        this.currentPlanId = parseInt(userData.plan ? userData.plan.id : 1); 
                         
-                        // KRITIS: Ambil ID plan aktif user saat ini. Jika Trial/Free (diasumsikan ID 1).
-                        this.currentPlanId = userData.plan ? userData.plan.id : 1; 
-                        
-                        // Perbarui localStorage dengan data terbaru (termasuk balance)
                         localStorage.setItem('user', JSON.stringify(userData.user));
                         
-                        // 2. Ambil daftar plans
                         const plansRes = await fetch('/api/plans', { headers: { 'Authorization': `Bearer ${token}` } });
-                        this.plans = await plansRes.json();
+                        const plansData = await plansRes.json();
+                        // Pastikan ID plan juga integer
+                        this.plans = plansData.map(p => ({...p, id: parseInt(p.id)}));
                         
                     } catch(e) {
                         console.error(e);
-                        this.showModal('error', 'Gagal Memuat Data', 'Gagal memuat saldo atau daftar paket. Silakan coba lagi.');
+                        this.showModal('error', 'Gagal Memuat Data', 'Silakan refresh halaman.');
                     } finally {
                         this.isLoading = false;
                     }
                 },
 
-                // Logika Cek Pembelian (Membandingkan ID Plan)
-                canBuy(planId) {
-                    // Hanya bisa beli jika ID plan baru LEBIH BESAR dari ID plan aktif
-                    return planId > this.currentPlanId;
+                // --- LOGIKA STATUS TOMBOL ---
+
+                // Apakah tombol harus disabled?
+                isButtonDisabled(p) {
+                    // Disabled jika: ID Plan <= Plan User ATAU Saldo Kurang (hanya jika upgrade)
+                    if (p.id <= this.currentPlanId) return true;
+                    if (this.userBalance < p.price) return true;
+                    return false;
                 },
 
-                getButtonText(planId, planPrice) {
-                    if (planId === this.currentPlanId) return 'PAKET ANDA SAAT INI';
-                    if (planId < this.currentPlanId) return 'ANDA SUDAH DIATAS LEVEL INI';
+                // Teks tombol berdasarkan kondisi
+                getButtonText(p) {
+                    if (p.id === this.currentPlanId) return 'Paket Anda Saat Ini';
+                    if (p.id < this.currentPlanId) return 'Anda sudah diatas Level ini';
                     
-                    // Cek Saldo hanya jika plan lebih tinggi (canBuy = true)
-                    if (this.userBalance < planPrice) return 'SALDO ANDA BELUM CUKUP';
+                    // Jika level > current, cek saldo
+                    if (this.userBalance < p.price) return 'Saldo Anda belum Cukup';
                     
-                    return 'AKTIFKAN PAKET INI';
+                    return 'Aktifkan Paket Ini';
                 },
 
-                // 1. Tampilkan Modal Konfirmasi
+                // Kelas CSS tombol berdasarkan kondisi
+                getButtonClass(p) {
+                    if (this.isButtonDisabled(p)) {
+                        // Style untuk disabled (abu-abu/merah tipis)
+                        if (this.userBalance < p.price && p.id > this.currentPlanId) {
+                             // Case saldo kurang: sedikit merah
+                             return 'bg-red-50 text-red-400 border-red-100 cursor-not-allowed';
+                        }
+                        return 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed';
+                    }
+                    // Style aktif (Primary)
+                    return 'bg-primary text-white hover:bg-slate-800 shadow-lg shadow-slate-200 border-transparent';
+                },
+
+                // --- ACTION ---
+
                 confirmBuy(p) {
-                    // Logika Gabungan untuk memfilter semua kondisi penolakan
-                    if (p.id === this.currentPlanId) {
-                        this.showModal('error', 'Pembelian Ditolak', 'Anda sudah berada di paket ini.');
-                        return;
-                    } 
-                    if (p.id < this.currentPlanId) {
-                        this.showModal('error', 'Pembelian Ditolak', 'Anda tidak dapat melakukan downgrade atau membeli paket yang lebih rendah.');
-                        return;
-                    }
-                    if (this.userBalance < p.price) {
-                         this.showModal('error', 'Saldo Tidak Cukup', `Saldo Anda (${this.fmtMoney(this.userBalance)}) tidak mencukupi untuk membeli paket ${p.name}.`);
-                         return;
-                    }
-                    
+                    // Double check logic (meskipun tombol disabled)
+                    if (this.isButtonDisabled(p)) return;
+
                     this.selectedPlan = p;
                     this.modal = {
                         show: true,
@@ -246,7 +244,6 @@
                     };
                 },
 
-                // 2. Eksekusi Pembelian saat tombol "Ya" diklik
                 async processBuy() {
                     this.modal.show = false;
                     this.isLoading = true;
@@ -262,7 +259,6 @@
                         
                         if(!res.ok) throw new Error(json.error);
                         
-                        // Setelah sukses, tampilkan Modal Sukses dan redirect
                         this.showModal('success', 'Pembelian Berhasil!', json.message, () => {
                             window.location.href = 'dashboard.html';
                         });
@@ -274,12 +270,10 @@
                     }
                 },
 
-                // Helper untuk menampilkan modal info/error/sukses
                 showModal(type, title, message, callback = null) {
                     this.modal = { show: true, type, title, message, callback };
                 },
 
-                // Handler tombol di dalam modal
                 handleConfirm() {
                     if (this.modal.callback) {
                         this.modal.callback.call(this); 
