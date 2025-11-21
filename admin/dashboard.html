@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin - WatchJob</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>tailwind.config = { theme: { extend: { colors: { primary: '#0f172a', emerald: { 500: '#10b981', 600: '#059669' } }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }</script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden" x-data="adminDashApp()" x-init="init()">
+
+    <!-- SIDEBAR -->
+    <aside class="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col z-40">
+        <div class="h-16 flex items-center px-6 border-b border-slate-100">
+            <span class="font-bold text-lg text-slate-800 tracking-tight">AdminPanel</span>
+        </div>
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+            <div class="px-4 pb-2 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Main Menu</div>
+            <a href="admin_dashboard.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition bg-slate-100 text-primary"><i class="fa-solid fa-gauge w-5 text-center"></i> Dashboard</a>
+            <a href="admin_users.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-users w-5 text-center"></i> Data Users</a>
+            <a href="admin_approvals.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-list-check w-5 text-center"></i> Approval</a>
+            <div class="px-4 pb-2 pt-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">System</div>
+            <a href="admin_content.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-box-open w-5 text-center"></i> Plans & Jobs</a>
+            <a href="admin_settings.html" class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-3 transition text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-gear w-5 text-center"></i> Settings</a>
+        </nav>
+        <div class="p-4 border-t border-slate-100"><button @click="logout" class="w-full py-3 border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-50 transition">Keluar</button></div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8">
+            <h2 class="text-lg font-bold text-slate-800">Dashboard Overview</h2>
+            <div class="text-xs font-bold bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full">Admin Mode</div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-4 md:p-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Total Member</p><h3 class="text-3xl font-bold text-slate-800 mt-2" x-text="stats.users">...</h3></div>
+                        <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><i class="fa-solid fa-users"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Deposit Sukses</p><h3 class="text-2xl font-bold text-slate-800 mt-2" x-text="fmtMoney(stats.deposit)">...</h3></div>
+                        <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-wallet"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Withdraw Sukses</p><h3 class="text-2xl font-bold text-slate-800 mt-2" x-text="fmtMoney(stats.withdraw)">...</h3></div>
+                        <div class="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Pending Approval</p><h3 class="text-3xl font-bold text-slate-800 mt-2" x-text="stats.pending">...</h3></div>
+                        <div class="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center"><i class="fa-solid fa-clock"></i></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function adminDashApp() {
+            return {
+                stats: { users:0, deposit:0, withdraw:0, pending:0 },
+                async init() {
+                    if (!localStorage.getItem('token')) return window.location.href = 'index.html';
+                    const u = JSON.parse(localStorage.getItem('user'));
+                    if(u.role !== 'admin') return window.location.href = 'dashboard.html';
+                    
+                    const res = await fetch('/api/admin?type=stats', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                    this.stats = await res.json();
+                },
+                logout() { localStorage.clear(); window.location.href = 'index.html'; },
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+            }
+        }
+    </script>
+</body>
+</html>
