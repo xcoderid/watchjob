@@ -82,20 +82,21 @@
         function walletApp() {
             return {
                 tab: 'depo',
-                // MENGGANTI localStorage ke sessionStorage
-                user: JSON.parse(sessionStorage.getItem('user') || '{}'), 
+                // Menggunakan localStorage/sessionStorage yang ada di browser saat init
+                user: JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}'), 
                 depo: { amount: '', method: 'Bank Transfer' },
                 wd: { amount: '' },
                 loading: false,
                 modal: { show: false, message: '' },
                 
                 async init() {
-                    // MENGGANTI localStorage ke sessionStorage
-                    if(!sessionStorage.getItem('token')) return this.logout();
+                    // Cek Sesi (menggunakan token di localStorage sebagai fallback utama Anda)
+                    if(!localStorage.getItem('token')) return this.logout();
+                    
                     const urlParams = new URLSearchParams(window.location.search);
                     if(urlParams.get('tab')) this.tab = urlParams.get('tab');
                     
-                    // Panggil fetchUser saat inisialisasi untuk mendapatkan saldo terbaru
+                    // KRITIS: Panggil fetchUser saat inisialisasi untuk mendapatkan saldo terbaru dari server
                     await this.fetchUser();
                 },
 
@@ -104,7 +105,7 @@
                     if (!userId) return this.logout();
 
                     try {
-                        const token = sessionStorage.getItem('token'); // MENGGANTI localStorage
+                        const token = localStorage.getItem('token'); // Menggunakan token yang ada
                         const res = await fetch(`/api/users?id=${userId}`, { 
                             headers: { 'Authorization': `Bearer ${token}` } 
                         });
@@ -114,11 +115,15 @@
                             
                             const updatedUser = data.user;
 
-                            // 2. Update state AlpineJS
+                            // 2. Update state AlpineJS (INI PENTING untuk re-render saldo)
                             this.user = updatedUser;
 
-                            // 3. Update sessionStorage (KRITIS untuk sinkronisasi)
-                            sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
+                            // 3. Update storage (biar dashboard juga sinkron)
+                            if (localStorage.getItem('token')) {
+                                localStorage.setItem('user', JSON.stringify(updatedUser)); 
+                            } else if (sessionStorage.getItem('token')) {
+                                sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
+                            }
                             
                         } else if (res.status === 401) {
                             this.logout();
@@ -135,7 +140,7 @@
                 },
 
                 async api(body) {
-                    const token = sessionStorage.getItem('token'); // MENGGANTI localStorage
+                    const token = localStorage.getItem('token'); // Menggunakan token dari storage
                     const res = await fetch('/api/transactions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -153,6 +158,8 @@
                         await this.api({ type: 'deposit', ...this.depo });
                         this.showModal('Deposit diajukan! Cek riwayat.');
                         this.depo.amount = '';
+                        // KRITIS: Refresh saldo setelah transaksi berhasil diajukan
+                        await this.fetchUser(); 
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
                 },
@@ -161,10 +168,13 @@
                     if(this.wd.amount < 50000) return this.showModal('Minimal penarikan Rp 50.000.');
                     this.loading = true;
                     try {
+                        // Backend handles balance check and bank info check
                         await this.api({ type: 'withdrawal', amount: this.wd.amount });
+                        
                         this.showModal('Penarikan diproses! Cek riwayat.');
                         this.wd.amount = '';
-                        // Refresh saldo segera setelah pengajuan WD 
+                        
+                        // KRITIS: Refresh saldo setelah WD (WD mengurangi saldo instan dengan status pending)
                         await this.fetchUser(); 
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
@@ -173,7 +183,8 @@
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 
                 logout() { 
-                    sessionStorage.clear(); // MENGGANTI localStorage
+                    localStorage.clear(); 
+                    sessionStorage.clear(); // Bersihkan keduanya untuk berjaga-jaga
                     window.location.href = 'index.html'; 
                 }
             }
