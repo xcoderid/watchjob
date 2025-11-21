@@ -1,6 +1,3 @@
-// Import library yang diperlukan
-import { SHA256 } from 'https://cdn.jsdelivr.net/npm/hash-wasm@4.9.0/dist/sha256.mjs';
-
 /**
  * Menghasilkan JSON Response
  * @param {object} data
@@ -20,12 +17,23 @@ export const jsonResponse = (data, status = 200) => {
 };
 
 /**
- * Menghitung hash SHA-256 untuk password
+ * KRITIS: Menghitung hash SHA-256 untuk password menggunakan Web Crypto API.
+ * Ini menggantikan impor CDN yang gagal di Cloudflare Pages.
  * @param {string} password
  * @returns {Promise<string>}
  */
 export const hashPassword = async (password) => {
-    return SHA256(password);
+    // 1. Mengubah string menjadi ArrayBuffer
+    const msgBuffer = new TextEncoder().encode(password);
+
+    // 2. Menghitung hash menggunakan Web Crypto API (SHA-256)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+
+    // 3. Mengubah ArrayBuffer menjadi string Hex
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
 };
 
 /**
@@ -41,7 +49,7 @@ export const getYoutubeId = (url) => {
 };
 
 /**
- * Memverifikasi token dan mengambil data user
+ * KRITIS: Memverifikasi token dan mengambil data user
  * @param {object} env - Environment bindings
  * @param {Request} request - Request object
  * @returns {Promise<object|null>} - Data user jika terotentikasi
@@ -62,6 +70,8 @@ export const authenticateUser = async (env, request) => {
 };
 
 /**
+ * KRITIS: Memperbarui kolom 'balance' di tabel users setelah setiap transaksi
+ *
  * @param {object} env - Environment bindings
  * @param {number} userId - ID pengguna yang saldonya akan diperbarui
  * @param {number} amount - Jumlah perubahan saldo (+ untuk tambah, - untuk kurang)
