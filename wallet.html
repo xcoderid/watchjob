@@ -21,6 +21,15 @@
 
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-6">
         
+        <!-- BALANCE CARD (BARU) -->
+        <div class="bg-primary rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            <div class="relative z-10">
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Saldo Tersedia</p>
+                <h2 class="text-3xl font-bold text-white" x-text="fmtMoney(user?.balance || 0)"></h2>
+            </div>
+            <div class="absolute -bottom-4 -right-4 text-8xl text-white/5"><i class="fa-solid fa-wallet"></i></div>
+        </div>
+
         <!-- Tabs -->
         <div class="bg-slate-100 p-1 rounded-xl flex">
             <button @click="tab='depo'" :class="tab==='depo'?'bg-white text-slate-800 shadow':'text-slate-400'" class="flex-1 py-2 text-xs font-bold rounded-lg transition">DEPOSIT</button>
@@ -61,14 +70,33 @@
         function walletApp() {
             return {
                 tab: 'depo',
+                user: JSON.parse(localStorage.getItem('user') || '{}'),
                 depo: { amount: '', method: 'Bank Transfer' },
                 wd: { amount: '' },
                 loading: false,
-                init() {
+                
+                async init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     const urlParams = new URLSearchParams(window.location.search);
                     if(urlParams.get('tab')) this.tab = urlParams.get('tab');
+                    
+                    // Fetch latest balance
+                    await this.fetchUser();
                 },
+
+                async fetchUser() {
+                    try {
+                        const res = await fetch(`/api/users?id=${this.user.id}`, { 
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } 
+                        });
+                        if(res.ok) {
+                            const data = await res.json();
+                            this.user = data.user;
+                            localStorage.setItem('user', JSON.stringify(this.user)); // Update cache
+                        }
+                    } catch(e) {}
+                },
+
                 async api(body) {
                     const res = await fetch('/api/transactions', {
                         method: 'POST',
@@ -79,6 +107,7 @@
                     if(!res.ok) throw new Error(json.error);
                     return json;
                 },
+
                 async submitDepo() {
                     if(this.depo.amount < 10000) return alert('Minimal 10.000');
                     this.loading = true;
@@ -88,6 +117,7 @@
                         window.location.href = 'history.html';
                     } catch(e){ alert(e.message); } finally { this.loading = false; }
                 },
+
                 async submitWd() {
                     if(this.wd.amount < 50000) return alert('Minimal 50.000');
                     this.loading = true;
@@ -96,7 +126,9 @@
                         alert('Penarikan diproses!');
                         window.location.href = 'history.html';
                     } catch(e){ alert(e.message); } finally { this.loading = false; }
-                }
+                },
+
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
             }
         }
     </script>
