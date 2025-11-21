@@ -159,7 +159,7 @@
                     localStorage.setItem('token', res.token);
                     localStorage.setItem('user', JSON.stringify(res.user));
                     if (res.user.role === 'admin') window.location.href = 'admin/dashboard';
-                    else this.refreshData();
+                    else window.location.href = 'dashboard';
                 },
 
                 logout() {
