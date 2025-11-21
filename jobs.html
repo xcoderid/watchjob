@@ -15,14 +15,28 @@
 </head>
 <body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="jobsApp()" x-init="init()">
 
-    <!-- HEADER -->
     <header class="h-16 bg-white border-b flex items-center px-6 shrink-0 z-20">
         <h1 class="font-bold text-lg text-slate-800">Daftar Misi</h1>
     </header>
 
-    <!-- CONTENT -->
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-4">
-        <div class="flex justify-between items-center"><span class="text-sm font-bold text-slate-600">Tersedia Hari Ini</span><span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold">Reset 00:00 WIB</span></div>
+        
+        <div class="flex justify-between items-center bg-white p-1 rounded-xl">
+            <div>
+                <span class="text-sm font-bold text-slate-600 block">Misi Tersedia</span>
+                <p class="text-xs mt-0.5">
+                    Sisa Kuota: 
+                    <span class="font-bold" :class="(daily_limit - tasks_done) > 0 ? 'text-primary' : 'text-red-500'" x-text="(daily_limit - tasks_done) + ' / ' + daily_limit">...</span>
+                </p>
+            </div>
+            
+            <div class="text-right">
+                <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">Reset Dalam</p>
+                <span class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded font-bold font-mono border border-red-100" x-text="countdown">
+                    00:00:00
+                </span>
+            </div>
+        </div>
         
         <template x-for="job in jobs" :key="job.id">
             <div 
@@ -41,7 +55,6 @@
                     <div class="flex justify-between items-end">
                         <div class="text-[10px] text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md"><i class="fa-regular fa-clock"></i> <span x-text="job.duration"></span>s</div>
                         
-                        <!-- Tanda Status Selesai -->
                         <span x-show="!completedIds.includes(job.id)" class="text-primary text-xs font-bold bg-primary/10 px-3 py-1 rounded-full">Mulai</span>
                         <span x-show="completedIds.includes(job.id)" class="text-emerald-600 text-xs font-bold">Selesai</span>
                     </div>
@@ -51,7 +64,6 @@
         <div x-show="jobs.length===0" class="p-10 text-center text-slate-400 border border-dashed rounded-xl">Tidak ada misi tersedia.</div>
     </main>
 
-    <!-- BOTTOM NAV -->
     <nav class="bg-white border-t flex justify-around items-center h-20 shrink-0 z-40 pb-4 text-slate-400">
         <a href="dashboard.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">Beranda</span></a>
         <a href="jobs.html" class="flex flex-col items-center w-16 gap-1 nav-item active"><i class="fa-solid fa-play-circle text-xl"></i><span class="text-[10px] font-bold">Misi</span></a>
@@ -64,12 +76,18 @@
         function jobsApp() {
             return {
                 jobs: [],
-                completedIds: [], // KRITIS: Inisialisasi sebagai array kosong
+                completedIds: [],
+                // State baru untuk Kuota dan Timer
+                daily_limit: 0,
+                tasks_done: 0,
+                countdown: '00:00:00',
                 
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     this.fetchJobs();
+                    this.startTimer(); // Jalankan timer
                 },
+                
                 async fetchJobs() {
                     try {
                         const token = localStorage.getItem('token');
@@ -82,20 +100,54 @@
                         
                         const data = await res.json();
                         this.jobs = data.jobs || [];
-                        // Di jobs.js, completed_ids sudah dihapus (karena kuota hanya membatasi total count), 
-                        // tetapi untuk menghindari error, kita inisialisasi sebagai array kosong jika tidak ada data dari API.
-                        // Jika Anda ingin menandai misi yang sudah diklaim, pastikan API Jobs mengembalikan data ini.
-                        // Untuk saat ini, kita biarkan kosong agar tidak terjadi error.
                         this.completedIds = []; 
+                        
+                        // Update State Kuota dari Response API
+                        this.daily_limit = data.daily_limit || 0;
+                        this.tasks_done = data.tasks_done || 0;
 
                     } catch(e) {
                          alert(e.message);
                     }
                 },
+
                 startJob(job) {
-                    // Redirect ke player.html dengan ID job
+                    // Cek Kuota Dulu di Frontend biar gak bolak-balik
+                    if (this.tasks_done >= this.daily_limit) {
+                        return alert('Kuota harian Anda sudah habis. Silakan tunggu reset jam 00:00 WIB.');
+                    }
                     window.location.href = `player.html?id=${job.id}`;
                 },
+
+                // Logic Timer Hitung Mundur ke Jam 00:00 WIB
+                startTimer() {
+                    setInterval(() => {
+                        const now = new Date();
+                        
+                        // Target: 00:00 WIB = 17:00 UTC
+                        // Kita set target ke jam 17:00 UTC hari ini
+                        let target = new Date();
+                        target.setUTCHours(17, 0, 0, 0);
+
+                        // Jika sekarang (UTC) sudah lewat jam 17:00, berarti target resetnya BESOK jam 17:00 UTC
+                        if (now.getUTCHours() >= 17) {
+                            target.setDate(target.getDate() + 1);
+                        }
+                        // (Jika jam 00:00-16:59 UTC, target tetap hari ini jam 17:00 UTC)
+
+                        const diff = target - now;
+
+                        if (diff <= 0) {
+                             this.countdown = "Memproses...";
+                        } else {
+                            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                            const s = Math.floor((diff % (1000 * 60)) / 1000);
+                            this.countdown = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                        }
+                    }, 1000);
+                },
+
                 getYtId(url) { const m = url?.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/); return (m && m[2].length === 11) ? m[2] : null; }
             }
         }
