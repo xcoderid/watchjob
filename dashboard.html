@@ -18,7 +18,10 @@
     <!-- HEADER -->
     <header class="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0 z-20">
         <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs" x-text="user?.username?.substring(0,2).toUpperCase()"></div>
+            <!-- AVATAR REVISI: ICON PEOPLE -->
+            <div class="w-9 h-9 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-sm border border-slate-200">
+                <i class="fa-solid fa-user"></i>
+            </div>
             <div>
                 <p class="text-[10px] font-bold text-slate-400 uppercase">Total Saldo</p>
                 <p class="font-bold text-base text-slate-800" x-text="fmtMoney(user?.balance)"></p>
@@ -29,7 +32,7 @@
 
     <!-- RUNNING TEXT -->
     <div class="bg-slate-800 text-white text-xs py-2 overflow-hidden whitespace-nowrap shrink-0">
-        <div class="inline-block px-4 font-medium" x-text="running_text"></div>
+        <div class="inline-block animate-marquee px-4 font-medium" x-text="running_text"></div>
     </div>
 
     <!-- CONTENT -->
@@ -66,8 +69,10 @@
             <a href="history.html" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-clock-rotate-left"></i></div><span class="text-[10px] font-bold text-slate-600">Riwayat</span></a>
             <a href="bank.html" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-building-columns"></i></div><span class="text-[10px] font-bold text-slate-600">Bank</span></a>
             <a href="password.html" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-lock"></i></div><span class="text-[10px] font-bold text-slate-600">Sandi</span></a>
-            <div class="flex flex-col items-center gap-2 opacity-50"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl shadow-sm"><i class="fa-solid fa-headset"></i></div><span class="text-[10px] font-bold text-slate-400">CS</span></div>
-            <div class="flex flex-col items-center gap-2 opacity-50"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center text-xl shadow-sm"><i class="fa-solid fa-info-circle"></i></div><span class="text-[10px] font-bold text-slate-400">Info</span></div>
+            
+            <!-- REVISI LINK INFO & CS -->
+            <a href="info.html" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-headset"></i></div><span class="text-[10px] font-bold text-slate-600">CS</span></a>
+            <a href="info.html" class="flex flex-col items-center gap-2 group"><div class="w-12 h-12 rounded-2xl bg-slate-50 text-slate-600 flex items-center justify-center text-xl shadow-sm group-active:scale-95 transition"><i class="fa-solid fa-info-circle"></i></div><span class="text-[10px] font-bold text-slate-600">Info</span></a>
         </div>
     </main>
 
