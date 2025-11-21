@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Upgrade - WatchJob</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { theme: { extend: { colors: { primary: '#1e293b', gold: '#f59e0b' }, fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
+    <style>[x-cloak]{display:none}</style>
+</head>
+<body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="plansApp()" x-init="init()">
+
+    <!-- HEADER -->
+    <header class="h-16 bg-white border-b flex items-center px-6 shrink-0 z-20">
+        <h1 class="font-bold text-lg text-slate-800">Upgrade Level</h1>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-4">
+        <template x-for="p in plans" :key="p.id">
+            <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative">
+                <div class="h-28 bg-slate-800 relative">
+                     <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60" onerror="this.style.display='none'">
+                     <div class="absolute bottom-0 left-0 p-4"><h3 class="text-white font-bold text-xl" x-text="p.name"></h3></div>
+                </div>
+                <div class="p-5">
+                     <div class="flex justify-between items-end mb-4">
+                         <div><p class="text-xs text-slate-400 font-bold uppercase">Harga Paket</p><p class="text-2xl font-bold text-primary" x-text="fmtMoney(p.price)"></p></div>
+                         <div class="text-right"><span class="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded border border-emerald-100" x-text="p.duration_days + ' Hari'"></span></div>
+                     </div>
+                     <div class="grid grid-cols-2 gap-3 mb-5 text-xs">
+                        <div class="bg-slate-50 p-2 rounded border border-slate-100 text-center"><p class="text-slate-400">Misi Harian</p><p class="font-bold text-base" x-text="p.daily_jobs_limit"></p></div>
+                        <div class="bg-slate-50 p-2 rounded border border-slate-100 text-center"><p class="text-slate-400">Komisi/Misi</p><p class="font-bold text-base" x-text="fmtMoney(p.commission)"></p></div>
+                     </div>
+                     <div x-show="p.return_capital" class="mb-4 text-[10px] text-amber-600 font-bold flex items-center gap-1"><i class="fa-solid fa-rotate-left"></i> Jaminan Modal Kembali</div>
+                     <button @click="buyPlan(p)" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg">Aktifkan Paket</button>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <!-- NAV -->
+    <nav class="bg-white border-t flex justify-around items-center h-20 shrink-0 z-40 pb-4 text-slate-400">
+        <a href="dashboard.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px] font-bold">Beranda</span></a>
+        <a href="jobs.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-play-circle text-xl"></i><span class="text-[10px] font-bold">Misi</span></a>
+        <a href="plans.html" class="relative -top-6 bg-primary text-white w-16 h-16 rounded-full shadow-xl flex items-center justify-center border-4 border-slate-50"><i class="fa-solid fa-gem text-2xl"></i></a>
+        <a href="wallet.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-wallet text-xl"></i><span class="text-[10px] font-bold">Dompet</span></a>
+        <a href="profile.html" class="flex flex-col items-center w-16 gap-1 nav-item"><i class="fa-solid fa-user text-xl"></i><span class="text-[10px] font-bold">Profil</span></a>
+    </nav>
+
+    <script>
+        function plansApp() {
+            return {
+                plans: [],
+                init() {
+                    if(!localStorage.getItem('token')) return window.location.href = 'index.html';
+                    this.fetchPlans();
+                },
+                async fetchPlans() {
+                    const res = await fetch('/api/plans', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                    this.plans = await res.json();
+                },
+                async buyPlan(p) {
+                    if(!confirm(`Beli ${p.name}? Saldo akan terpotong.`)) return;
+                    try {
+                        const res = await fetch('/api/plans', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ plan_id: p.id })
+                        });
+                        const json = await res.json();
+                        if(!res.ok) throw new Error(json.error);
+                        alert(json.message);
+                        window.location.href = 'dashboard.html';
+                    } catch(e) { alert(e.message); }
+                },
+                fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); }
+            }
+        }
+    </script>
+</body>
+</html>
