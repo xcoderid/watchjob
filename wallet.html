@@ -62,25 +62,26 @@
         <div x-show="tab==='wd'" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
             <h3 class="font-bold text-slate-800 mb-4">Tarik Saldo</h3>
             
-            <!-- Tampilan Data Bank (Conditional) -->
-            <div x-if="bankInfo && bankInfo.account_number">
-                <div class="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg mb-4 border border-blue-100">
-                    <p class="font-bold mb-1">Rekening Tujuan:</p>
-                    <p x-text="bankInfo.bank_name + ' - ' + bankInfo.account_number"></p>
-                    <p x-text="bankInfo.account_name"></p>
-                </div>
-            </div>
-            
-            <!-- Pesan Error Bank (Jika Belum Ada) -->
-            <div x-if="!bankInfo || !bankInfo.account_number">
-                 <div class="p-3 bg-red-50 text-red-700 text-sm rounded-lg mb-4 border border-red-200">
-                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> Silahkan ikat kartu bank anda di profile!
-                </div>
+            <!-- BLOK KONDISIONAL BARU UNTUK TAMPILAN BANK -->
+            <div class="mb-4">
+                <template x-if="bankInfo && bankInfo.account_number">
+                    <div class="p-3 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-100">
+                        <p class="font-bold mb-1">Rekening Tujuan:</p>
+                        <p x-text="bankInfo.bank_name + ' - ' + bankInfo.account_number"></p>
+                        <p x-text="bankInfo.account_name"></p>
+                    </div>
+                </template>
+                
+                <template x-if="!bankInfo || !bankInfo.account_number">
+                     <div class="p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+                        <i class="fa-solid fa-triangle-exclamation mr-1"></i> Silahkan ikat akun bank anda di profile!
+                    </div>
+                </template>
             </div>
             
 
             <div class="space-y-4">
-                <div><label class="text-xs font-bold text-slate-400">Jumlah (Min 50.000)</label><input x-model="wd.amount" type="number" class="w-full p-3 border rounded-xl mt-1 font-bold" placeholder="50000"></div>
+                <div><label class="text-xs font-bold text-slate-400">Jumlah (Min 20.000)</label><input x-model="wd.amount" type="number" class="w-full p-3 border rounded-xl mt-1 font-bold" placeholder="20000"></div>
                 
                 <!-- Tombol Tarik Uang (Disabled jika loading atau bank info kosong) -->
                 <button @click="submitWd" :disabled="loading || !bankInfo || !bankInfo.account_number" 
@@ -136,11 +137,12 @@
                         if(res.ok) {
                             const data = await res.json();
                             const updatedUser = data.user;
+
+                            // Logika: bankInfo akan menjadi objek HANYA jika account_number ada
+                            this.bankInfo = data.bank_info && data.bank_info.account_number ? data.bank_info : null; 
                             
                             // 2. KRITIS: Update state AlpineJS
                             this.user = updatedUser;
-                            // bank_info diambil dari data.bank_info yang dikirim backend
-                            this.bankInfo = data.bank_info && data.bank_info.account_number ? data.bank_info : null; 
                             
                             // 3. Update storage (biar sinkron)
                             localStorage.setItem('user', JSON.stringify(updatedUser)); 
@@ -184,8 +186,8 @@
                 },
 
                 async submitWd() {
-                    // Cek apakah data bank sudah ada (BankInfo sudah dicek di template dan tombol disabled)
-                    if (!this.bankInfo || !this.bankInfo.account_number) {
+                    // Cek apakah data bank sudah ada. bankInfo akan null jika tidak ada account_number.
+                    if (!this.bankInfo) {
                         this.showModal('Silahkan ikat kartu bank anda di profile!');
                         return;
                     }
