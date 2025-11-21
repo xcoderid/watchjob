@@ -15,12 +15,12 @@
 </head>
 <body class="bg-slate-50 font-sans h-screen flex flex-col max-w-lg mx-auto shadow-2xl bg-white" x-data="walletApp()" x-init="init()">
 
-    <!-- MODAL POPUP JIKA GAGAL WITHDRAW (Native popup diganti) -->
+    <!-- MODAL POPUP (Custom Modal Error) -->
     <div class="fixed inset-0 z-[100] flex items-center justify-center px-4" x-show="modal.show" x-cloak>
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="modal.show=false"></div>
         <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 text-center">
             <div class="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fa-solid fa-circle-xmark text-3xl"></i></div>
-            <h3 class="text-xl font-bold text-slate-800 mb-2">Gagal</h3>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">Peringatan</h3>
             <p class="text-sm text-slate-500 mb-6" x-text="modal.message"></p>
             <button @click="modal.show=false" class="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm">Tutup</button>
         </div>
@@ -33,7 +33,7 @@
 
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-6">
         
-        <!-- BALANCE CARD (HARUS DI REFRESH) -->
+        <!-- BALANCE CARD (Salod terbaru harus ditampilkan di sini) -->
         <div class="bg-primary rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
             <div class="relative z-10">
                 <p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Saldo Tersedia</p>
@@ -82,40 +82,51 @@
         function walletApp() {
             return {
                 tab: 'depo',
-                user: JSON.parse(localStorage.getItem('user') || '{}'),
+                // MENGGANTI localStorage ke sessionStorage
+                user: JSON.parse(sessionStorage.getItem('user') || '{}'), 
                 depo: { amount: '', method: 'Bank Transfer' },
                 wd: { amount: '' },
                 loading: false,
-                modal: { show: false, message: '' }, // State untuk custom modal error
+                modal: { show: false, message: '' },
                 
                 async init() {
-                    if(!localStorage.getItem('token')) return window.location.href = 'index.html';
+                    // MENGGANTI localStorage ke sessionStorage
+                    if(!sessionStorage.getItem('token')) return this.logout();
                     const urlParams = new URLSearchParams(window.location.search);
                     if(urlParams.get('tab')) this.tab = urlParams.get('tab');
                     
+                    // Panggil fetchUser saat inisialisasi untuk mendapatkan saldo terbaru
                     await this.fetchUser();
                 },
 
                 async fetchUser() {
+                    const userId = this.user.id;
+                    if (!userId) return this.logout();
+
                     try {
-                        const token = localStorage.getItem('token');
-                        const userId = this.user.id;
-                        
+                        const token = sessionStorage.getItem('token'); // MENGGANTI localStorage
                         const res = await fetch(`/api/users?id=${userId}`, { 
                             headers: { 'Authorization': `Bearer ${token}` } 
                         });
                         
                         if(res.ok) {
                             const data = await res.json();
-                            // PERBAIKAN UTAMA: Update seluruh state user dengan data terbaru dari server
-                            this.user = data.user;
-                            // Update localStorage user agar dashboard.html juga mendapatkan saldo terbaru
-                            localStorage.setItem('user', JSON.stringify(this.user)); 
+                            
+                            const updatedUser = data.user;
+
+                            // 2. Update state AlpineJS
+                            this.user = updatedUser;
+
+                            // 3. Update sessionStorage (KRITIS untuk sinkronisasi)
+                            sessionStorage.setItem('user', JSON.stringify(updatedUser)); 
                             
                         } else if (res.status === 401) {
                             this.logout();
                         }
-                    } catch(e) { console.error("Error fetching user data:", e); }
+                    } catch(e) { 
+                        console.error("Error fetching user data:", e); 
+                        this.showModal(`Gagal memuat saldo: ${e.message}`);
+                    }
                 },
                 
                 showModal(msg) {
@@ -124,7 +135,7 @@
                 },
 
                 async api(body) {
-                    const token = localStorage.getItem('token');
+                    const token = sessionStorage.getItem('token'); // MENGGANTI localStorage
                     const res = await fetch('/api/transactions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -153,7 +164,8 @@
                         await this.api({ type: 'withdrawal', amount: this.wd.amount });
                         this.showModal('Penarikan diproses! Cek riwayat.');
                         this.wd.amount = '';
-                        await this.fetchUser(); // Refresh saldo segera setelah pengajuan WD
+                        // Refresh saldo segera setelah pengajuan WD 
+                        await this.fetchUser(); 
                         window.location.href = 'history.html';
                     } catch(e){ this.showModal(e.message); } finally { this.loading = false; }
                 },
@@ -161,7 +173,7 @@
                 fmtMoney(n) { return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0); },
                 
                 logout() { 
-                    localStorage.clear(); 
+                    sessionStorage.clear(); // MENGGANTI localStorage
                     window.location.href = 'index.html'; 
                 }
             }
