@@ -1,4 +1,4 @@
-import { jsonResponse, authenticateUser } from '../utils';
+import { jsonResponse, authenticateUser, updateUserBalance } from '../utils';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -75,38 +75,53 @@ export async function onRequestPost(context) {
             return jsonResponse({ error: 'Kuota harian paket Anda sudah habis.' }, 403);
         }
 
-        // --- PERUBAHAN: MENGHAPUS PENGECEKAN DUPLIKAT JOB ID ---
-        // User sekarang bebas menonton video yang sama berkali-kali
-        
-        // 3. Proses Transaksi
+        const commission = sub.commission;
         const ops = [];
         const job = await env.DB.prepare('SELECT title FROM jobs WHERE id = ?').bind(job_id).first();
         
         // Catat penyelesaian tugas
-        ops.push(env.DB.prepare(`INSERT INTO task_completions (user_id, job_id, amount_earned) VALUES (?, ?, ?)`).bind(user.id, job_id, sub.commission));
-        // Catat pendapatan
-        ops.push(env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'income', ?, ?, 'success')`).bind(user.id, sub.commission, `Reward: ${job?.title || 'Video'}`));
+        ops.push(env.DB.prepare(`INSERT INTO task_completions (user_id, job_id, amount_earned) VALUES (?, ?, ?)`).bind(user.id, job_id, commission));
+        
+        // Catat pendapatan & update saldo user
+        ops.push(env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'income', ?, ?, 'success')`).bind(user.id, commission, `Reward: ${job?.title || 'Video'}`));
+        await updateUserBalance(env, user.id, commission); // KRITIS: Update Saldo User
 
-        // 4. Komisi Rabat Upline
-        if (user.referrer_id && sub.id !== 1) {
-            const upline = await env.DB.prepare(`
-                SELECT p.rabat_percent, u.id 
-                FROM users u
-                JOIN user_subscriptions s ON u.id = s.user_id
-                JOIN plans p ON s.plan_id = p.id
-                WHERE u.id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
-            `).bind(user.referrer_id).first();
+        // 4. LOGIKA RABAT (Komisi Upline dari Tugas Downline)
+        // Rabat Tugas diambil dari SETTINGS GLOBAL
+        if (user.referrer_id && sub.id !== 1) { // Downline bukan Trial
+            const settingsRes = await env.DB.prepare("SELECT key, value FROM site_settings WHERE key LIKE 'affiliate_l%'").all();
+            const rates = { 'affiliate_l1': 10, 'affiliate_l2': 5, 'affiliate_l3': 2 }; 
+            if(settingsRes.results) { settingsRes.results.forEach(s => rates[s.key] = parseFloat(s.value)); }
+            
+            const rabatRateL1 = rates['affiliate_l1'] || 0; // Menggunakan rate L1 sebagai rabat tugas L1
 
-            if (upline && upline.rabat_percent > 0) {
-                const rabat = (sub.commission * upline.rabat_percent) / 100;
-                if (rabat > 0) {
-                    ops.push(env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')`).bind(upline.id, rabat, `Rabat Task dari Downline`));
+            // L1 Upline
+            const l1 = await env.DB.prepare('SELECT id, referrer_id, username FROM users WHERE id = ?').bind(user.referrer_id).first();
+            if (l1) {
+                const uplinePlan = await env.DB.prepare(`
+                    SELECT p.price as upline_plan_price 
+                    FROM user_subscriptions s 
+                    JOIN plans p ON s.plan_id = p.id 
+                    WHERE s.user_id = ? AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
+                `).bind(l1.id).first();
+
+                // Rabat hanya diberikan jika Upline punya paket aktif (untuk capping)
+                if (uplinePlan) {
+                    let rabatAmount = (commission * rabatRateL1) / 100;
+                    
+                    // Capping rabat tugas: Maksimal rabat tidak boleh melebihi harga paket Upline
+                    if (rabatAmount > uplinePlan.upline_plan_price) { rabatAmount = uplinePlan.upline_plan_price; }
+
+                    if (rabatAmount > 0) {
+                        ops.push(env.DB.prepare("INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'commission', ?, ?, 'success')").bind(l1.id, rabatAmount, `Rabat L1 dari ${user.username} (Task)`));
+                        await updateUserBalance(env, l1.id, rabatAmount); // KRITIS: Update Saldo Upline L1
+                    }
                 }
             }
         }
 
         await env.DB.batch(ops);
-        return jsonResponse({ success: true, reward: sub.commission });
+        return jsonResponse({ success: true, reward: commission });
 
     } catch (e) {
       return jsonResponse({ error: e.message }, 500);
