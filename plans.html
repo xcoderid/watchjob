@@ -84,7 +84,8 @@
     <!-- CONTENT -->
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-5">
         <template x-for="p in plans" :key="p.id">
-            <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative group">
+            <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition relative group"
+                 :class="!canBuy(p.id) ? 'opacity-70 grayscale' : ''">
                 <div class="h-32 bg-slate-800 relative overflow-hidden">
                      <img :src="p.thumbnail_url" class="absolute inset-0 w-full h-full object-cover opacity-60 transition duration-700 group-hover:scale-105" onerror="this.style.display='none'">
                      <div class="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
@@ -125,8 +126,11 @@
                          </div>
                      </div>
 
-                     <button @click="confirmBuy(p)" class="w-full py-3.5 bg-primary text-white rounded-xl font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200 transition transform active:scale-95">
-                         Aktifkan Paket Ini
+                     <button @click="confirmBuy(p)" 
+                             :disabled="!canBuy(p.id)"
+                             class="w-full py-3.5 rounded-xl font-bold text-sm transition transform active:scale-95"
+                             :class="canBuy(p.id) ? 'bg-primary text-white hover:bg-slate-800 shadow-lg shadow-slate-200' : 'bg-slate-300 text-slate-500 cursor-not-allowed'">
+                         <span x-text="getButtonText(p.id)"></span>
                      </button>
                 </div>
             </div>
@@ -154,11 +158,12 @@
                 isLoading: false,
                 modal: { show: false, title: '', message: '', type: 'info', callback: null },
                 selectedPlan: null,
-                userBalance: 0, // State untuk menyimpan saldo user terbaru
-
+                userBalance: 0, 
+                currentPlanId: 0, // ID Plan user yang sedang aktif
+                
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
-                    this.fetchData(); // Menggabungkan fetch plan dan fetch user
+                    this.fetchData(); 
                 },
                 
                 async fetchData() {
@@ -167,12 +172,17 @@
                         const token = localStorage.getItem('token');
                         const user = JSON.parse(localStorage.getItem('user'));
 
-                        // 1. Ambil data user terbaru (WAJIB untuk saldo)
+                        // 1. Ambil data user terbaru (WAJIB untuk saldo dan current plan ID)
                         const userRes = await fetch(`/api/users?id=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
                         const userData = await userRes.json();
                         
-                        // Perbarui saldo lokal dan localStorage agar sinkron
+                        // Sinkronisasi data user
                         this.userBalance = userData.user.balance;
+                        
+                        // Asumsi Plan Trial = ID 1
+                        this.currentPlanId = userData.plan ? userData.plan.id : 1; 
+                        
+                        // Perbarui localStorage dengan data terbaru (termasuk balance)
                         localStorage.setItem('user', JSON.stringify(userData.user));
                         
                         // 2. Ambil daftar plans
@@ -187,8 +197,26 @@
                     }
                 },
 
+                // KRITIS: Logika Cek Pembelian
+                canBuy(planId) {
+                    // ID Plan yang ada di database harus berurutan (1, 2, 3, ...)
+                    // User tidak bisa membeli plan yang ID-nya sama atau lebih kecil dari plan aktif.
+                    return planId > this.currentPlanId;
+                },
+
+                getButtonText(planId) {
+                    if (planId === this.currentPlanId) return 'PAKET AKTIF';
+                    if (planId < this.currentPlanId) return 'SUDAH DILEVEL LEBIH TINGGI';
+                    return 'AKTIFKAN PAKET INI';
+                },
+
                 // 1. Tampilkan Modal Konfirmasi
                 confirmBuy(p) {
+                    if (!this.canBuy(p.id)) {
+                        this.showModal('error', 'Pembelian Ditolak', 'Anda tidak dapat melakukan downgrade atau membeli paket yang sama.');
+                        return;
+                    }
+
                     // Cek Saldo sebelum menampilkan modal konfirmasi
                     if (this.userBalance < p.price) {
                          this.showModal('error', 'Saldo Tidak Cukup', `Saldo Anda (${this.fmtMoney(this.userBalance)}) tidak mencukupi untuk membeli paket ${p.name} seharga ${this.fmtMoney(p.price)}.`);
