@@ -21,21 +21,13 @@
 
     <main class="flex-1 overflow-y-auto p-5 pb-28 space-y-4">
         
-        <div class="flex justify-between items-center bg-white p-1 rounded-xl">
-            <div>
-                <span class="text-sm font-bold text-slate-600 block">Misi Tersedia</span>
-                <p class="text-xs mt-0.5">
-                    Sisa Kuota: 
-                    <span class="font-bold" :class="(daily_limit - tasks_done) > 0 ? 'text-primary' : 'text-red-500'" x-text="(daily_limit - tasks_done) + ' / ' + daily_limit">...</span>
-                </p>
-            </div>
-            
-            <div class="text-right">
-                <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">Reset Dalam</p>
-                <span class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded font-bold font-mono border border-red-100" x-text="countdown">
-                    00:00:00
-                </span>
-            </div>
+        <div class="flex justify-between items-center">
+            <span class="text-sm font-bold text-slate-600">
+                Tersedia: <span x-text="daily_limit ? (daily_limit - tasks_done) + '/' + daily_limit : '...'"></span>
+            </span>
+            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold font-mono" x-text="countdown">
+                Reset 00:00 WIB
+            </span>
         </div>
         
         <template x-for="job in jobs" :key="job.id">
@@ -77,7 +69,7 @@
             return {
                 jobs: [],
                 completedIds: [],
-                // State baru untuk Kuota dan Timer
+                // State baru wajib ada agar tidak undefined/0
                 daily_limit: 0,
                 tasks_done: 0,
                 countdown: '00:00:00',
@@ -85,7 +77,7 @@
                 init() {
                     if(!localStorage.getItem('token')) return window.location.href = 'index.html';
                     this.fetchJobs();
-                    this.startTimer(); // Jalankan timer
+                    this.startTimer(); // Jalankan timer saat init
                 },
                 
                 async fetchJobs() {
@@ -100,43 +92,34 @@
                         
                         const data = await res.json();
                         this.jobs = data.jobs || [];
-                        this.completedIds = []; 
+                        this.completedIds = [];
                         
-                        // Update State Kuota dari Response API
+                        // INI YANG KURANG SEBELUMNYA: Masukkan data kuota dari API ke variabel Alpine
                         this.daily_limit = data.daily_limit || 0;
                         this.tasks_done = data.tasks_done || 0;
 
                     } catch(e) {
-                         alert(e.message);
+                         // alert(e.message); // Optional: matikan alert jika mengganggu
                     }
                 },
 
                 startJob(job) {
-                    // Cek Kuota Dulu di Frontend biar gak bolak-balik
-                    if (this.tasks_done >= this.daily_limit) {
-                        return alert('Kuota harian Anda sudah habis. Silakan tunggu reset jam 00:00 WIB.');
+                    // Cek Kuota di Frontend
+                    if (this.daily_limit > 0 && this.tasks_done >= this.daily_limit) {
+                        return alert('Kuota harian habis.');
                     }
                     window.location.href = `player.html?id=${job.id}`;
                 },
 
-                // Logic Timer Hitung Mundur ke Jam 00:00 WIB
                 startTimer() {
                     setInterval(() => {
                         const now = new Date();
-                        
-                        // Target: 00:00 WIB = 17:00 UTC
-                        // Kita set target ke jam 17:00 UTC hari ini
+                        // Target 17:00 UTC (00:00 WIB)
                         let target = new Date();
                         target.setUTCHours(17, 0, 0, 0);
-
-                        // Jika sekarang (UTC) sudah lewat jam 17:00, berarti target resetnya BESOK jam 17:00 UTC
-                        if (now.getUTCHours() >= 17) {
-                            target.setDate(target.getDate() + 1);
-                        }
-                        // (Jika jam 00:00-16:59 UTC, target tetap hari ini jam 17:00 UTC)
-
+                        if (now.getUTCHours() >= 17) target.setDate(target.getDate() + 1);
+                        
                         const diff = target - now;
-
                         if (diff <= 0) {
                              this.countdown = "Memproses...";
                         } else {
