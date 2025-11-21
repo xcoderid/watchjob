@@ -89,7 +89,8 @@
     <script>
         function dashApp() {
             return {
-                user: JSON.parse(localStorage.getItem('user')),
+                // Inisialisasi user dari storage
+                user: JSON.parse(localStorage.getItem('user') || '{}'),
                 token: localStorage.getItem('token'),
                 planName: 'Loading...',
                 todayIncome: 0,
@@ -101,12 +102,24 @@
                 },
                 async fetchData() {
                     try {
-                        const res = await fetch(`/api/users?id=${this.user.id}`, { headers: {'Authorization': `Bearer ${this.token}`} });
-                        if(!res.ok) { localStorage.clear(); window.location.href = 'index.html'; return; }
+                        // Pastikan ID user tersedia
+                        const userId = this.user.id;
+                        if (!userId) { 
+                             console.error("User ID not available in storage.");
+                             this.logout();
+                             return;
+                        }
+
+                        const res = await fetch(`/api/users?id=${userId}`, { headers: {'Authorization': `Bearer ${this.token}`} });
+                        
+                        if(!res.ok) { 
+                            console.error("Failed fetching data:", res.status);
+                            this.logout(); 
+                            return; 
+                        }
+                        
                         const data = await res.json();
                         
-                        // KRITIS: Perbarui state user dengan data baru, termasuk balance.
-                        // Objek this.user akan dipantau oleh AlpineJS untuk mengupdate UI.
                         this.user = data.user; 
                         
                         this.planName = data.plan?.name || 'Trial Member';
@@ -114,7 +127,7 @@
                         this.tasksDone = data.user.tasks_done;
                         this.running_text = data.running_text;
                         
-                        // Perbarui localStorage dengan data terbaru dari server
+                        // Perbarui localStorage dengan data terbaru (termasuk balance)
                         localStorage.setItem('user', JSON.stringify(this.user));
                     } catch(e){
                          console.error("Error fetching dashboard data:", e);
