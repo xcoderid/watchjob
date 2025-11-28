@@ -103,7 +103,7 @@ export async function onRequestPost(context) {
         ops.push(env.DB.prepare(`INSERT INTO transactions (user_id, type, amount, description, status) VALUES (?, 'income', ?, ?, 'success')`).bind(user.id, commission, `Reward: ${job?.title || 'Video'}`));
         await updateUserBalance(env, user.id, commission); 
 
-        // 4. LOGIKA RABAT / KOMISI UPLINE (Aman dari error)
+        // 4. LOGIKA RABAT / KOMISI UPLINE (Pastikan tidak melebihi posisi upline.)
         if (user.referrer_id && sub.id !== 1) { 
             try {
                 // Ambil settings persentase rabat
