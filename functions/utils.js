@@ -17,8 +17,7 @@ export const jsonResponse = (data, status = 200) => {
 };
 
 /**
- * KRITIS: Menghitung hash SHA-256 untuk password menggunakan Web Crypto API.
- * Ini menggantikan impor CDN yang gagal di Cloudflare Pages.
+ * Menghitung hash SHA-256 untuk password menggunakan Web Crypto API.
  * @param {string} password
  * @returns {Promise<string>}
  */
@@ -49,7 +48,7 @@ export const getYoutubeId = (url) => {
 };
 
 /**
- * KRITIS: Memverifikasi token dan mengambil data user
+ * Memverifikasi token dan mengambil data user
  * @param {object} env - Environment bindings
  * @param {Request} request - Request object
  * @returns {Promise<object|null>} - Data user jika terotentikasi
@@ -70,15 +69,14 @@ export const authenticateUser = async (env, request) => {
 };
 
 /**
- * KRITIS: Memperbarui kolom 'balance' di tabel users setelah setiap transaksi
- *
+ * Memperbarui kolom 'balance' di tabel users setelah setiap transaksi
  * @param {object} env - Environment bindings
  * @param {number} userId - ID pengguna yang saldonya akan diperbarui
  * @param {number} amount - Jumlah perubahan saldo (+ untuk tambah, - untuk kurang)
  * @returns {Promise<void>}
  */
 export const updateUserBalance = async (env, userId, amount) => {
-    // Memastikan perubahan adalah angka
+    // Pastikan angka
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount === 0) {
         console.warn(`[UPDATE BALANCE] Invalid amount or zero change for user ${userId}: ${amount}`);
