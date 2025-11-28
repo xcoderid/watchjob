@@ -1,7 +1,7 @@
 import { jsonResponse, getYoutubeId, authenticateUser, hashPassword, updateUserBalance } from '../utils';
 
 /**
- * KRITIS: Memverifikasi user adalah Admin sebelum menjalankan endpoint ini
+ * Memverifikasi user adalah Admin sebelum menjalankan endpoint ini
  * @param {object} env - Environment bindings
  * @param {Request} request - Request object
  * @returns {Promise<object|null>} - Data user jika terotentikasi dan role Admin
